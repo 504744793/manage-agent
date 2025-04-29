@@ -1,0 +1,5887 @@
+<template>
+  <a-page-wrapper>
+    <a-row :gutter="[0, 8]">
+      <a-col :span="24">
+        <a-panel>
+          <template #title>
+            <SearchOutlined />
+            搜索
+          </template>
+          <a-form
+            layout="inline"
+            ref="formRef"
+            :model="data.custom.searchForm"
+            :label-col="data.custom.labelCol"
+            :wrapper-col="data.custom.wrapperCol"
+          >
+            <a-col :span="6">
+              <a-form-item label="查询号" name="cfQueryCode">
+                <a-input
+                  v-model:value="data.custom.searchForm.cfQueryCode"
+                  placeholder="输入查询号"
+                  allow-clear
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="6">
+              <a-form-item label="需求名称" name="cfNeedNm">
+                <a-input
+                  v-model:value="data.custom.searchForm.cfNeedNm"
+                  placeholder="输入需求名称"
+                  allow-clear
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="6">
+              <a-form-item label="是否发布" name="cfStat">
+                <a-select
+                  v-model:value="data.custom.searchForm.cfStat"
+                  placeholder="选择是否发布"
+                  allow-clear
+                >
+                  <a-select-option
+                    v-for="(value, index) in sysParamInfo.publish"
+                    :value="value.paramValue"
+                    :key="index"
+                  >
+                    {{ value.paramName }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="6">
+              <a-form-item>
+                <div>
+                  <a-button
+                    type="primary"
+                    style="margin-right: 8px"
+                    @click="onSearch"
+                    >搜索</a-button
+                  >
+                  <a-button @click="resetSearch">重置</a-button>
+                </div>
+              </a-form-item>
+            </a-col>
+          </a-form>
+        </a-panel>
+      </a-col>
+      <a-col :span="24">
+        <div style="background-color: #fff">
+          <a-toolbar :items="toolbarItems">
+            <template #add>
+              <PlusCircleOutlined />
+            </template>
+            <template #update>
+              <FormOutlined />
+            </template>
+            <template #remove>
+              <DeleteOutlined />
+            </template>
+            <template #publish>
+              <EyeOutlined />
+            </template>
+            <template #unPublish>
+              <EyeInvisibleOutlined />
+            </template>
+            <template #outInterface>
+              <FundViewOutlined />
+            </template>
+            <template #bindingMenu>
+              <ToolOutlined />
+            </template>
+            <template #exporttofile><DownloadOutlined /></template>
+            <template #importfromfile><UploadOutlined /></template>
+          </a-toolbar>
+          <!-- 自定义信息-->
+          <a-table-x
+            :row-selection="{
+              selectedRowKeys: data.custom.selectedRowKeys,
+              onChange: onSelectChange,
+            }"
+            :dataSource="data.custom.tableList"
+            :columns="data.custom.columns"
+            :loading="data.custom.tableLoading"
+            :pagination="data.custom.pagination"
+            :scroll="{ x: 1300 }"
+            rowKey="cfId"
+            :customRow="handleRow"
+            @change="handleCustomChange"
+          >
+            <template #cfStat="{ text }">
+              {{ getSysParamName("publish", text) }}
+            </template>
+            <template #action="{ record }">
+              <a-button
+                :disabled="!(record.cfStat === 'Y')"
+                type="primary"
+                @click="preview(record)"
+                >预览
+              </a-button>
+            </template>
+          </a-table-x>
+        </div>
+      </a-col>
+    </a-row>
+  </a-page-wrapper>
+  <!-- 预览抽屉-->
+  <a-drawer
+    title="预览"
+    placement="right"
+    width="100%"
+    :mask="true"
+    :closable="true"
+    :destroyOnClose="true"
+    v-model:visible="data.custom.previewVisible"
+    @close="handleClosePreview"
+  >
+    <custom-preview
+      :id="data.custom.previewId"
+      :hide-param="null"
+      init-url="/systool/customform/eformInfo/initEformInfo"
+      table-data-url="/systool/customform/eformInfo/useQueryList"
+      add-form-url="/systool/customform/condition/useAddQuery"
+      edit-form-url="/systool/customform/condition/useUpdateQuery"
+    />
+  </a-drawer>
+
+  <!-- 新增编辑抽屉-->
+  <a-drawer
+    v-model:visible="data.custom.visible"
+    :title="data.custom.modalTitle"
+    @close="handleCancel"
+    placement="right"
+    width="100%"
+    destroyOnClose
+  >
+    <a-tabs
+      type="card"
+      v-model:activeKey="data.tabActiveKey"
+      animated
+      :tabBarStyle="{ margin: 0 }"
+      @change="tabChange"
+    >
+      <a-tab-pane key="1" tab="需求配置">
+        <a-spin tip="Loading..." :spinning="data.tab1.spinning">
+          <a-card
+            title="需求名称"
+            :bordered="false"
+            :bodyStyle="{ marginBottom: '20px' }"
+          >
+            <a-form
+              ref="tab1FormRef"
+              :rules="data.tab1.rules"
+              :label-col="data.tab1.labelCol"
+              :wrapper-col="data.tab1.wrapperCol"
+              :model="data.tab1.form"
+            >
+              <a-row :gutter="[0, 12]">
+                <a-col :span="12">
+                  <a-form-item
+                    label="需求名称"
+                    name="cfNeedNm"
+                    validateTrigger="change"
+                    :hasFeedback="true"
+                  >
+                    <a-input
+                      v-model:value="data.tab1.form.cfNeedNm"
+                      :disabled="data.custom.btnType == 'update'"
+                      placeholder="需求名称"
+                      allow-clear
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="数据源" name="cfDataSrc">
+                    <a-select
+                      v-model:value="data.tab1.form.cfDataSrc"
+                      :showSearch="true"
+                      @change="onDsChange"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="(item, index) in data.tab1.dsSelect"
+                        :key="[item.dsName, index]"
+                        :value="item.id"
+                      >
+                        {{ item.dsName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[0, 12]">
+                <a-col :span="12">
+                  <a-form-item label="数据库表" name="cfTabNam">
+                    <a-input
+                      v-model:value="data.tab1.form.cfTabNam"
+                      allow-clear
+                      placeholder="点击选择数据库表"
+                      readonly
+                      @click="showDsTables"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="双人核准" name="cfDblCheck">
+                    <a-select
+                      v-model:value="data.tab1.form.cfDblCheck"
+                      placeholder="请选择是否启用双人核准"
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.yesOrNo"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+
+              <a-row :gutter="[0, 12]">
+                <a-col :span="12">
+                  <a-form-item label="详情绑定名称" name="cfDtlBindName">
+                    <a-input
+                      v-model:value="data.tab1.form.cfDtlBindName"
+                      @change="cfDtlBindNameChange"
+                      placeholder="请输入详情绑定名称"
+                      allow-clear
+                    />
+                  </a-form-item>
+                </a-col>
+
+                <a-col :span="12">
+                  <a-form-item label="详情绑定页面" name="cfDtlBindPage">
+                    <a-input
+                      v-model:value="data.tab1.form.cfDtlBindPage"
+                      allow-clear
+                      placeholder="点击选择绑定页面"
+                      readonly
+                      @click="showPages"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="[0, 12]">
+                <a-col :span="24">
+                  <a-form-item
+                    label="描述"
+                    name="cfDsc"
+                    :label-col="{ span: 4, offset: 0 }"
+                    :wrapper-col="{ span: 20, offset: 0 }"
+                  >
+                    <a-textarea
+                      :rows="4"
+                      v-model:value="data.tab1.form.cfDsc"
+                      placeholder="请输入描述"
+                      allow-clear
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+            <!-- 选择物理表-->
+            <a-modal
+              :maskClosable="false"
+              v-model:visible="data.tab1.visibleTables"
+              title="请选择物理表"
+              @ok="chooseTable"
+              @cancel="handleChooseTableCancel"
+              width="60%"
+            >
+              <a-page-wrapper>
+                <a-row :gutter="[0, 8]">
+                  <a-col :span="24">
+                    <a-panel>
+                      <template #title>
+                        <SearchOutlined />
+                        搜索
+                      </template>
+                      <a-form
+                        layout="inline"
+                        ref="tableFormRef"
+                        :model="data.tab1.table.searchForm"
+                        :label-col="data.tab1.table.labelCol"
+                        :wrapper-col="data.tab1.table.wrapperCol"
+                      >
+                        <a-col :span="8">
+                          <a-form-item label="表名" name="tableName">
+                            <a-input
+                              v-model:value="
+                                data.tab1.table.searchForm.tableName
+                              "
+                              placeholder="输入表名"
+                              allow-clear
+                            />
+                          </a-form-item>
+                        </a-col>
+                        <a-col :span="8">
+                          <a-form-item label="注释" name="tableComment">
+                            <a-input
+                              v-model:value="
+                                data.tab1.table.searchForm.tableComment
+                              "
+                              placeholder="输入注释"
+                              allow-clear
+                            />
+                          </a-form-item>
+                        </a-col>
+                        <a-col :span="8">
+                          <a-form-item>
+                            <div>
+                              <a-button
+                                type="primary"
+                                style="margin-right: 8px"
+                                @click="onTableSearch"
+                                >搜索</a-button
+                              >
+                              <a-button @click="resetTableSearch"
+                                >重置</a-button
+                              >
+                            </div>
+                          </a-form-item>
+                        </a-col>
+                      </a-form>
+                    </a-panel>
+                  </a-col>
+                  <a-col :span="24">
+                    <div style="background-color: #fff">
+                      <!-- 物理表数据-->
+                      <a-table-x
+                        :row-selection="{
+                          selectedRowKeys: data.tab1.table.selectedRowKeys,
+                          onChange: onTableSelectChange,
+                          type: 'radio',
+                        }"
+                        :dataSource="data.tab1.table.tableList"
+                        :columns="data.tab1.table.columns"
+                        :loading="data.tab1.table.tableLoading"
+                        :pagination="data.tab1.table.pagination"
+                        :customRow="handleTableRow"
+                        rowKey="tableName"
+                        :scroll="{ y: 390 }"
+                        @change="handleTableChange"
+                      >
+                      </a-table-x>
+                    </div>
+                  </a-col>
+                </a-row>
+              </a-page-wrapper>
+            </a-modal>
+            <!-- 选择详情绑定页面-->
+            <a-modal
+              :maskClosable="false"
+              v-model:visible="data.tab1.visiblePages"
+              title="请选择详情绑定页面"
+              @ok="choosePage"
+              @cancel="handleChoosePageCancel"
+              width="60%"
+            >
+              <a-page-wrapper>
+                <a-row :gutter="[0, 8]">
+                  <a-col :span="24">
+                    <a-panel>
+                      <template #title>
+                        <SearchOutlined />
+                        搜索
+                      </template>
+                      <a-form
+                        layout="inline"
+                        ref="pageFormRef"
+                        :model="data.tab1.page.searchForm"
+                        :label-col="data.tab1.page.labelCol"
+                        :wrapper-col="data.tab1.page.wrapperCol"
+                      >
+                        <a-col :span="8">
+                          <a-form-item label="查询号" name="cfQueryCode">
+                            <a-input
+                              v-model:value="
+                                data.tab1.page.searchForm.cfQueryCode
+                              "
+                              placeholder="输入查询号"
+                              allow-clear
+                            />
+                          </a-form-item>
+                        </a-col>
+                        <a-col :span="8">
+                          <a-form-item label="需求名称" name="cfNeedNm">
+                            <a-input
+                              v-model:value="data.tab1.page.searchForm.cfNeedNm"
+                              placeholder="输入需求名称"
+                              allow-clear
+                            />
+                          </a-form-item>
+                        </a-col>
+                        <a-col :span="8">
+                          <a-form-item>
+                            <div>
+                              <a-button
+                                type="primary"
+                                style="margin-right: 8px"
+                                @click="onPageSearch"
+                                >搜索</a-button
+                              >
+                              <a-button @click="resetPageSearch">重置</a-button>
+                            </div>
+                          </a-form-item>
+                        </a-col>
+                      </a-form>
+                    </a-panel>
+                  </a-col>
+                  <a-col :span="24">
+                    <div style="background-color: #fff">
+                      <!-- 详情页面数据-->
+                      <a-table-x
+                        :row-selection="{
+                          selectedRowKeys: data.tab1.page.selectedRowKeys,
+                          onChange: onPageSelectChange,
+                          type: 'radio',
+                        }"
+                        :dataSource="data.tab1.page.tableList"
+                        :columns="data.tab1.page.columns"
+                        :loading="data.tab1.page.tableLoading"
+                        :pagination="data.tab1.page.pagination"
+                        rowKey="cfId"
+                        :scroll="{ y: 390 }"
+                        :customRow="handlePageRow"
+                        @change="handlePageChange"
+                      >
+                        <template #cfStat="{ text }">
+                          {{ getSysParamName("publish", text) }}
+                        </template>
+                      </a-table-x>
+                    </div>
+                  </a-col>
+                </a-row>
+              </a-page-wrapper>
+            </a-modal>
+          </a-card>
+        </a-spin>
+        <div
+          :style="{
+            position: 'absolute',
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            borderTop: '1px solid #e9e9e9',
+            padding: '10px 16px',
+            background: '#fff',
+            textAlign: 'right',
+            zIndex: 1,
+          }"
+        >
+          <a-button
+            type="primary"
+            style="margin-right: 8px"
+            @click="tab1FormSubmit"
+            :disabled="data.tab1.spinning"
+          >
+            保存
+          </a-button>
+          <a-button @click="tab1FormReset" :disabled="data.tab1.spinning"
+            >重置</a-button
+          >
+        </div>
+      </a-tab-pane>
+      <a-tab-pane key="2" tab="表格配置" :disabled="data.tabDisable">
+        <a-spin tip="Loading..." :spinning="data.tab2.spinning">
+          <div style="background-color: #fff; margin-top: 10px">
+            <a-toolbar :items="tab2ToolbarItems">
+              <template #sync>
+                <SyncOutlined />
+              </template>
+            </a-toolbar>
+            <!-- 表格字段信息 -->
+            <editableCell
+              :columns="data.tab2.table.columns"
+              :table-data="data.tab2.table.tableList"
+              :edit-list="data.tab2.table.editColumns"
+              :pagination="false"
+              :loading="data.tab2.table.tableLoading"
+              :scroll="{ x: 800, y: 600 }"
+              @receive-data="tab2ReceiveData"
+              rowKey="fdId"
+            >
+            </editableCell>
+          </div>
+          <div :style="data.buttonStyle">
+            <a-button
+              type="primary"
+              @click="tab2TableSubmit"
+              :disabled="data.tab2.table.tableLoading"
+              >保存</a-button
+            >
+          </div>
+          <!--配置下拉框（单选、多选）数据-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab2.selectData.visible"
+            :title="data.tab2.selectData.title"
+            @cancel="handleTab2SelectDataCancel"
+            @ok="tab2AddSelectDataSubmit"
+            width="50%"
+          >
+            <a-spin
+              :tip="data.tab2.selectData.spinningTip"
+              :spinning="data.tab2.selectData.spinning"
+            >
+              <a-form
+                ref="tab2SelectDataFormRef"
+                :model="data.tab2.selectData.form"
+                :rules="data.tab2.selectData.rules"
+                :label-col="data.tab2.selectData.labelCol"
+                :wrapper-col="data.tab2.selectData.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item
+                      label="sql语句"
+                      name="fdSysValue"
+                      validateTrigger=""
+                      :hasFeedback="true"
+                    >
+                      <Codemirror
+                        style="flex: 1; font-size: 14px"
+                        v-model:value="data.tab2.selectData.form.fdSysValue"
+                        :options="data.tab2.selectData.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <template
+                        v-if="
+                          data.tab2.fdDatatype === '3' ||
+                          data.tab2.fdDatatype === '4'
+                        "
+                      >
+                        <span>必须包含name，code，其中name和code都得用英文单引号括起来。</span>
+                        <br />
+                        <span
+                          >例： <br />select '是' name , '1' code from dual
+                          <br />union all <br />select '否' name , '0' code from
+                          dual
+                        </span>
+                      </template>
+                      <template v-if="data.tab2.fdDatatype === '5'">
+                        <span
+                          >必须包含title，id，key，parentId。key和id值不可重复需保持唯一性。title为树形名称，id为节点id，parentId为父级id，顶级节点的父级id必须为0，key为传入后台的值。</span
+                        >
+                        <br />
+                        <span
+                          >例： <br />SELECT '湖北省' title,'1' id, '420000'
+                          key,'0' parentId from dual <br />union all
+                          <br />SELECT '武汉市' title,'2' id, '420100' key,'1'
+                          parentId from dual
+                        </span>
+                      </template>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+        </a-spin>
+      </a-tab-pane>
+      <a-tab-pane key="3" tab="按钮配置" :disabled="data.tabDisable">
+        <a-spin tip="Loading..." :spinning="data.tab3.spinning">
+          <div style="background-color: #fff">
+            <a-toolbar :items="tab3ToolbarItems">
+              <template #reset>
+                <SyncOutlined />
+              </template>
+            </a-toolbar>
+            <!-- 按钮表格字段信息(特殊)-->
+            <eitableButtonCell
+              :columns="data.tab3.table.columns"
+              :table-data="data.tab3.table.tableList"
+              :edit-list="data.tab3.table.editColumns"
+              :pagination="false"
+              :loading="data.tab3.table.tableLoading"
+              :scroll="{ x: 800, y: 600 }"
+              @receive-data="tab3ReceiveData"
+              rowKey="ebId"
+            >
+            </eitableButtonCell>
+          </div>
+          <div :style="data.buttonStyle">
+            <a-button
+              type="primary"
+              @click="tab3TableSubmit"
+              :disabled="data.tab3.table.tableLoading"
+              >保存</a-button
+            >
+          </div>
+          <!--是否配置,配置信息-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            :destroyOnClose="true"
+            okText="保存"
+            v-model:visible="data.tab3.selectVisible"
+            title="配置信息"
+            @cancel="handleTab3SelectCancel"
+            @ok="tab3AddSelectSubmit"
+            width="65%"
+          >
+            <a-spin
+              :tip="data.tab3.select.spinningTip"
+              :spinning="data.tab3.select.spinning"
+            >
+              <a-form
+                ref="tab3SelectFormRef"
+                :model="data.tab3.select.form"
+                :label-col="data.tab3.select.labelCol"
+                :wrapper-col="data.tab3.select.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="业务主键" name="ebEformId">
+                      <a-input
+                        readOnly
+                        style="width: 100%; background-color: #f0f0f4;"
+                        v-model:value="data.tab3.select.form.ebEformId"
+                        :options="data.tab3.select.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="按钮代码" name="ebButtonId">
+                      <a-input
+                        readOnly
+                        style="width: 100%; background-color: #f0f0f4;"
+                        v-model:value="data.tab3.select.form.ebButtonId"
+                        :options="data.tab3.select.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="按钮名称" name="ebButtonName">
+                      <a-input
+                        v-model:value="data.tab3.select.form.ebButtonName"
+                        :options="data.tab3.select.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row v-if="data.tab3.select.form.ebButtonId === 'buttonBat1'">
+                  <a-col :span="24">
+                    <a-form-item label="配置信息" name="ebEditContent">
+                      <a-textarea
+                        v-model:value="data.tab3.select.form.ebEditContent"
+                        :options="data.tab3.select.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row v-if="data.tab3.select.form.ebButtonId === 'buttonBat1'">
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <span
+                        >请获取数据采集页面中已发布信息的主键,配置到配置信息中</span
+                      >
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row v-if="data.tab3.select.form.ebButtonId === 'buttonAdd' || data.tab3.select.form.ebButtonId === 'buttonEdit'" >
+                  <a-col :span="24">
+                    <a-form-item label="存储过程数据源" name="ebDataSource">
+                      <a-select v-model:value="data.tab3.select.form.ebDatasource" :allowClear="true">
+                        <a-select-option
+                          v-for="item in data.tab3.dataSources"
+                          :key="item.id"
+                          :vlaue="item.id">
+                          {{ item.dsName }}
+                        </a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row v-if="data.tab3.select.form.ebButtonId === 'buttonAdd' || data.tab3.select.form.ebButtonId === 'buttonEdit'" >
+                  <a-col :span="24">
+                    <a-form-item label="存储过程" name="ebProcName">
+                      <a-textarea
+                        v-model:value="data.tab3.select.form.ebProcName"
+                        :options="data.tab3.select.options"
+                        border
+                        :rows="6"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row v-if="data.tab3.select.form.ebButtonId === 'buttonAdd' || data.tab3.select.form.ebButtonId === 'buttonEdit'">
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <p>1.在配置存储过程时，请使用 <b style="color:red;">${字段名称}</b> 这种格式设置存储过程参数，如: SP_T_CTMG_TEST( #{F} , ${FD_ID} , ${FD_NAME} )</p>
+                      <p>2.存储过程的第一个参数应固定为 <b style="color:red;">#{F}</b> ，代表是<b style="color:red;">新增( 'C' )</b>还是<b style="color:red;">编辑( 'E' )</b>的标识符，其后才是配置的各字段的值</p>
+                      <p>3.参数<b style="color:red;">[USERID]</b>表示操作用户的ID，<b style="color:red;">[ORGNO]</b>表示操作用户所属机构代码，<b style="color:red;">[LOGICSYSNO]</b>表示所在逻辑子系统代码</p>
+                      <p>4.作为存储过程参数的字段名称都应为<b style="color:red;">大写字母</b></p>
+                      <p>5.示例：<b style="color:red;">SP_T_CTMG_TEST( #{F}  ,  ${FD_ID}  ,  ${FD_NAME}  ,  ${FD_CODE}  ,  ${FD_DESC}  ,  [USERID]  ,  [ORGNO] )</b></p>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+        </a-spin>
+      </a-tab-pane>
+      <a-tab-pane key="4" tab="条件配置" :disabled="data.tabDisable">
+        <a-spin tip="Loading..." :spinning="data.tab4.spinning">
+          <div style="background-color: #fff">
+            <a-toolbar :items="tab4ToolbarItems">
+              <template #reset>
+                <SyncOutlined />
+              </template>
+              <template #add>
+                <PlusCircleOutlined />
+              </template>
+              <template #remove>
+                <DeleteOutlined />
+              </template>
+            </a-toolbar>
+            <!-- 表格字段信息-->
+            <editableCell
+              :row-selection="{
+                selectedRowKeys: data.tab4.table.selectedRowKeys,
+                onChange: onTab4SelectChange,
+              }"
+              :columns="data.tab4.table.columns"
+              :table-data="data.tab4.table.tableList"
+              :edit-list="data.tab4.table.editColumns"
+              :pagination="false"
+              :loading="data.tab4.table.tableLoading"
+              :scroll="{ x: 800, y: 600 }"
+              @receive-data="tab4ReceiveData"
+              rowKey="ecId"
+            >
+            </editableCell>
+          </div>
+          <div :style="data.buttonStyle">
+            <a-button
+              type="primary"
+              @click="tab4TableSubmit"
+              :disabled="data.tab4.table.tableLoading"
+              >保存</a-button
+            >
+          </div>
+          <!--新增-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab4.formVisible"
+            title="新增"
+            @cancel="handleTab4FormCancel"
+            @ok="tab4AddFormSubmit"
+            width="50%"
+          >
+            <a-spin tip="Loading..." :spinning="data.tab4.formSpinning">
+              <a-form
+                ref="tab4FormRef"
+                :model="data.tab4.form"
+                :rules="data.tab4.rules"
+                :label-col="data.tab4.labelCol"
+                :wrapper-col="data.tab4.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="12">
+                    <a-form-item label="显示字段名称" name="ecShowFieldName">
+                      <a-select
+                        v-model:value="data.tab4.form.ecShowFieldName"
+                        @change="onField4SelectChange"
+                        placeholder="请选择显示字段名称"
+                        allow-clear
+                      >
+                        <a-select-option
+                          v-for="option in data.tab2.table.tableCols"
+                          :value="option.value"
+                          :key="option.key"
+                        >
+                          {{ option.key }}
+                        </a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                  <a-col :span="12">
+                    <a-form-item label="显示类型" name="ecShowType">
+                      <a-select
+                        v-model:value="data.tab4.form.ecShowType"
+                        @select="selectTab4ShowTypeChange"
+                        placeholder="请选择显示类型"
+                        allow-clear
+                      >
+                        <a-select-option
+                          v-for="option in sysParamInfo.searchShowType"
+                          :value="option.paramValue"
+                          :key="option.paramValue"
+                        >
+                          {{ option.paramName }}
+                        </a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="12">
+                    <a-form-item label="查询类型" name="ecQueryType">
+                      <a-select
+                        v-model:value="data.tab4.form.ecQueryType"
+                        placeholder="请选择查询类型"
+                        allow-clear
+                      >
+                        <a-select-option
+                          v-for="option in sysParamInfo.queryType"
+                          :value="option.paramValue"
+                          :key="option.paramValue"
+                        >
+                          {{ option.paramName }}
+                        </a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                  <a-col :span="12">
+                    <a-form-item label="是否存在默认值" name="ecDefltValFlg">
+                      <a-select
+                        v-model:value="data.tab4.form.ecDefltValFlg"
+                        @select="selectTab4Change"
+                        placeholder="请选择是否存在默认值"
+                        allow-clear
+                      >
+                        <a-select-option
+                          v-for="option in sysParamInfo.yesOrNo"
+                          :value="option.paramValue"
+                          :key="option.paramValue"
+                        >
+                          {{ option.paramName }}
+                        </a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="12">
+                    <a-form-item label="是否显示" name="ecConditionIsshow">
+                      <a-select
+                        v-model:value="data.tab4.form.ecConditionIsshow"
+                        placeholder="请选择是否显示"
+                        allow-clear
+                      >
+                        <a-select-option
+                          v-for="option in sysParamInfo.show"
+                          :value="option.paramValue"
+                          :key="option.paramValue"
+                        >
+                          {{ option.paramName }}
+                        </a-select-option>
+                      </a-select>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <!--                <a-row>-->
+                <!--                    <a-col :span="12">-->
+                <!--                    <a-form-item label="是否必填" name="ecIsRequired">-->
+                <!--                      <a-select v-model:value="data.tab4.form.ecIsRequired" placeholder="请选择是否必填">-->
+                <!--                        <a-select-option-->
+                <!--                          v-for="option in sysParamInfo.yesOrNo"-->
+                <!--                          :value="option.paramValue"-->
+                <!--                          :key="option.paramValue"-->
+                <!--                        >-->
+                <!--                          {{ option.paramName }}-->
+                <!--                        </a-select-option>-->
+                <!--                      </a-select>-->
+                <!--                    </a-form-item>-->
+                <!--                  </a-col>-->
+                <!--               </a-row>-->
+              </a-form>
+            </a-spin>
+          </a-modal>
+          <!--配置默认值sql-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab4.selectVisible"
+            title="配置默认值"
+            @cancel="handleTab4SelectCancel"
+            @ok="tab4AddSelectSubmit"
+            width="50%"
+          >
+            <a-spin
+              :tip="data.tab4.select.spinningTip"
+              :spinning="data.tab4.select.spinning"
+            >
+              <a-form
+                ref="tab4SelectFormRef"
+                :model="data.tab4.select.form"
+                :rules="data.tab4.select.rules"
+                :label-col="data.tab4.select.labelCol"
+                :wrapper-col="data.tab4.select.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item
+                      label="默认值sql"
+                      name="ecDefltVal"
+                      validateTrigger=""
+                      :hasFeedback="true"
+                    >
+                      <Codemirror
+                        style="flex: 1; font-size: 14px"
+                        v-model:value="data.tab4.select.form.ecDefltVal"
+                        :options="data.tab4.select.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <span>sql必须返回一列一个值</span>
+                      <br />
+                      <span
+                        >例：
+                        <br />
+                        select '1' from dual
+                        <br />
+                        select to_char(sysdate,'yyyyMMdd') from dual
+                      </span>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+          <!--配置下拉框（单选、多选）数据-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab4.selectData.visible"
+            :title="data.tab4.selectData.title"
+            @cancel="handleTab4SelectDataCancel"
+            @ok="tab4AddSelectDataSubmit"
+            width="50%"
+          >
+            <a-spin
+              :tip="data.tab4.selectData.spinningTip"
+              :spinning="data.tab4.selectData.spinning"
+            >
+              <a-form
+                ref="tab4SelectDataFormRef"
+                :model="data.tab4.selectData.form"
+                :rules="data.tab4.selectData.rules"
+                :label-col="data.tab4.selectData.labelCol"
+                :wrapper-col="data.tab4.selectData.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item
+                      label="sql语句"
+                      name="ecShowTypeSql"
+                      validateTrigger=""
+                      :hasFeedback="true"
+                    >
+                      <Codemirror
+                        style="flex: 1; font-size: 14px"
+                        v-model:value="data.tab4.selectData.form.ecShowTypeSql"
+                        :options="data.tab4.selectData.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <template
+                        v-if="
+                          data.tab4.form.ecShowType === '3' ||
+                          data.tab4.form.ecShowType === '4'
+                        "
+                      >
+                        <span>必须包含name，code，其中name和code都得用英文单引号括起来。</span>
+                        <br />
+                        <span
+                          >例： <br />select '是' name , '1' code from dual
+                          <br />union all <br />select '否' name , '0' code from
+                          dual
+                        </span>
+                      </template>
+                      <template v-if="data.tab4.form.ecShowType === '5'">
+                        <span
+                          >必须包含title，id，key，parentId。key和id值不可重复需保持唯一性。title为树形名称，id为节点id，parentId为父级id，顶级节点的父级id必须为0，key为传入后台的值。</span
+                        >
+                        <br />
+                        <span
+                          >例： <br />SELECT '湖北省' title,'1' id, '420000'
+                          key,'0' parentId from dual <br />union all
+                          <br />SELECT '武汉市' title,'2' id, '420100' key,'1'
+                          parentId from dual
+                        </span>
+                      </template>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+        </a-spin>
+      </a-tab-pane>
+      <a-tab-pane key="5" tab="添加表单配置" :disabled="data.tabDisable">
+        <a-spin tip="Loading..." :spinning="data.tab5.spinning">
+          <div style="background-color: #fff">
+            <a-toolbar :items="tab5ToolbarItems">
+              <template #reset>
+                <SyncOutlined />
+              </template>
+              <template #add>
+                <PlusCircleOutlined />
+              </template>
+              <template #remove>
+                <DeleteOutlined />
+              </template>
+            </a-toolbar>
+            <!-- 表格字段信息-->
+            <editableCell
+              :row-selection="{
+                selectedRowKeys: data.tab5.table.selectedRowKeys,
+                onChange: onTab5SelectChange,
+              }"
+              :columns="data.tab5.table.columns"
+              :table-data="data.tab5.table.tableList"
+              :edit-list="data.tab5.table.editColumns"
+              :pagination="false"
+              :loading="data.tab5.table.tableLoading"
+              :scroll="{ x: 800, y: 600 }"
+              @receive-data="tab5ReceiveData"
+              rowKey="ecId"
+            >
+            </editableCell>
+          </div>
+          <div :style="data.buttonStyle">
+            <a-button
+              type="primary"
+              @click="tab5TableSubmit"
+              :disabled="data.tab5.table.tableLoading"
+              >保存</a-button
+            >
+          </div>
+          <!--新增-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab5.formVisible"
+            title="新增"
+            @cancel="handleTab5FormCancel"
+            @ok="tab5AddFormSubmit"
+            width="50%"
+          >
+            <a-form
+              ref="tab5FormRef"
+              :model="data.tab5.form"
+              :rules="data.tab5.rules"
+              :label-col="data.tab5.labelCol"
+              :wrapper-col="data.tab5.wrapperCol"
+            >
+              <a-row>
+                <a-col :span="12">
+                  <a-form-item label="显示字段名称" name="ecShowFieldName">
+                    <a-select
+                      v-model:value="data.tab5.form.ecShowFieldName"
+                      @change="onField5SelectChange"
+                      placeholder="请选择显示字段名称"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in data.tab2.table.tableCols"
+                        :value="option.value"
+                        :key="option.key"
+                      >
+                        {{ option.key }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="显示类型" name="ecShowType">
+                    <a-select
+                      v-model:value="data.tab5.form.ecShowType"
+                      @select="selectTab5ShowTypeChange"
+                      placeholder="请选择显示类型"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.addShowType"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row>
+                <a-col :span="12">
+                  <a-form-item label="是否必填" name="ecIsRequired">
+                    <a-select
+                      v-model:value="data.tab5.form.ecIsRequired"
+                      placeholder="请选择是否必填"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.yesOrNo"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="是否存在默认值" name="ecDefltValFlg">
+                    <a-select
+                      v-model:value="data.tab5.form.ecDefltValFlg"
+                      @select="selectTab5Change"
+                      placeholder="请选择是否存在默认值"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.yesOrNo"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row>
+                <a-col :span="12">
+                  <a-form-item label="是否显示" name="ecConditionIsshow">
+                    <a-select
+                      v-model:value="data.tab5.form.ecConditionIsshow"
+                      placeholder="请选择是否显示"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.show"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </a-modal>
+          <!--配置下拉框（单选、多选）数据-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab5.selectData.visible"
+            :title="data.tab5.selectData.title"
+            @cancel="handleTab5SelectDataCancel"
+            @ok="tab5AddSelectDataSubmit"
+            width="50%"
+          >
+            <a-spin
+              :tip="data.tab5.selectData.spinningTip"
+              :spinning="data.tab5.selectData.spinning"
+            >
+              <a-form
+                ref="tab5SelectDataFormRef"
+                :model="data.tab5.selectData.form"
+                :rules="data.tab5.selectData.rules"
+                :label-col="data.tab5.selectData.labelCol"
+                :wrapper-col="data.tab5.selectData.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item
+                      label="sql语句"
+                      name="ecShowTypeSql"
+                      validateTrigger=""
+                      :hasFeedback="true"
+                    >
+                      <Codemirror
+                        style="flex: 1; font-size: 14px"
+                        v-model:value="data.tab5.selectData.form.ecShowTypeSql"
+                        :options="data.tab5.selectData.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <template
+                        v-if="
+                          data.tab5.form.ecShowType === '3' ||
+                          data.tab5.form.ecShowType === '4'
+                        "
+                      >
+                        <span>必须包含name，code，其中name和code都得用英文单引号括起来。</span>
+                        <br />
+                        <span
+                          >例： <br />select '是' name , '1' code from dual
+                          <br />union all <br />select '否' name , '0' code from
+                          dual
+                        </span>
+                      </template>
+                      <template v-if="data.tab5.form.ecShowType === '5'">
+                        <span
+                          >必须包含title，id，key，parentId。key和id值不可重复需保持唯一性。title为树形名称，id为节点id，parentId为父级id，顶级节点的父级id必须为0，key为传入后台的值。</span
+                        >
+                        <br />
+                        <span
+                          >例： <br />SELECT '湖北省' title,'1' id, '420000'
+                          key,'0' parentId from dual <br />union all
+                          <br />SELECT '武汉市' title,'2' id, '420100' key,'1'
+                          parentId from dual
+                        </span>
+                      </template>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+          <!--配置默认值sql-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab5.selectVisible"
+            title="配置默认值"
+            @cancel="handleTab5SelectCancel"
+            @ok="tab5AddSelectSubmit"
+            width="50%"
+          >
+            <a-spin
+              :tip="data.tab5.select.spinningTip"
+              :spinning="data.tab5.select.spinning"
+            >
+              <a-form
+                ref="tab5SelectFormRef"
+                :model="data.tab5.select.form"
+                :rules="data.tab5.select.rules"
+                :label-col="data.tab5.select.labelCol"
+                :wrapper-col="data.tab5.select.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item
+                      label="默认值sql"
+                      name="ecDefltVal"
+                      validateTrigger=""
+                      :hasFeedback="true"
+                    >
+                      <Codemirror
+                        style="flex: 1; font-size: 14px"
+                        v-model:value="data.tab5.select.form.ecDefltVal"
+                        :options="data.tab5.select.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <span>sql必须返回一列一个值</span>
+                      <br />
+                      <span
+                        >例：
+                        <br />
+                        select '1' from dual
+                        <br />
+                        select to_char(sysdate,'yyyyMMdd') from dual
+                      </span>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+        </a-spin>
+      </a-tab-pane>
+      <a-tab-pane key="6" tab="编辑表单配置" :disabled="data.tabDisable">
+        <a-spin tip="Loading..." :spinning="data.tab6.spinning">
+          <div style="background-color: #fff">
+            <a-toolbar :items="tab6ToolbarItems">
+              <template #reset>
+                <SyncOutlined />
+              </template>
+              <template #add>
+                <PlusCircleOutlined />
+              </template>
+              <template #remove>
+                <DeleteOutlined />
+              </template>
+            </a-toolbar>
+            <!-- 表格字段信息-->
+            <editableCell
+              :row-selection="{
+                selectedRowKeys: data.tab6.table.selectedRowKeys,
+                onChange: onTab6SelectChange,
+              }"
+              :columns="data.tab6.table.columns"
+              :table-data="data.tab6.table.tableList"
+              :edit-list="data.tab6.table.editColumns"
+              :pagination="false"
+              :loading="data.tab6.table.tableLoading"
+              :scroll="{ x: 800, y: 600 }"
+              @receive-data="tab6ReceiveData"
+              rowKey="ecId"
+            >
+            </editableCell>
+          </div>
+          <div :style="data.buttonStyle">
+            <a-button
+              type="primary"
+              @click="tab6TableSubmit"
+              :disabled="data.tab6.table.tableLoading"
+              >保存</a-button
+            >
+          </div>
+          <!--新增-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab6.formVisible"
+            title="新增"
+            @cancel="handleTab6FormCancel"
+            @ok="tab6AddFormSubmit"
+            width="50%"
+          >
+            <a-form
+              ref="tab6FormRef"
+              :model="data.tab6.form"
+              :rules="data.tab6.rules"
+              :label-col="data.tab6.labelCol"
+              :wrapper-col="data.tab6.wrapperCol"
+            >
+              <a-row>
+                <a-col :span="12">
+                  <a-form-item label="显示字段名称" name="ecShowFieldName">
+                    <a-select
+                      v-model:value="data.tab6.form.ecShowFieldName"
+                      @change="onField6SelectChange"
+                      placeholder="请选择显示字段名称"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in data.tab2.table.tableCols"
+                        :value="option.value"
+                        :key="option.key"
+                      >
+                        {{ option.key }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="显示类型" name="ecShowType">
+                    <a-select
+                      v-model:value="data.tab6.form.ecShowType"
+                      @select="selectTab6ShowTypeChange"
+                      placeholder="请选择显示类型"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.editShowType"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row>
+                <a-col :span="12">
+                  <a-form-item label="是否必填" name="ecIsRequired">
+                    <a-select
+                      v-model:value="data.tab6.form.ecIsRequired"
+                      placeholder="请选择是否必填"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.yesOrNo"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="是否编辑" name="ecIsEditor">
+                    <a-select
+                      v-model:value="data.tab6.form.ecIsEditor"
+                      placeholder="请选择是否必填"
+                      allow-clear
+                    >
+                      <a-select-option
+                        v-for="option in sysParamInfo.yesOrNo"
+                        :value="option.paramValue"
+                        :key="option.paramValue"
+                      >
+                        {{ option.paramName }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+            </a-form>
+          </a-modal>
+          <!--配置下拉框（单选、多选）数据-->
+          <a-modal
+            :centered="true"
+            :maskClosable="false"
+            okText="保存"
+            v-model:visible="data.tab6.selectData.visible"
+            :title="data.tab6.selectData.title"
+            @cancel="handleTab6SelectDataCancel"
+            @ok="tab6AddSelectDataSubmit"
+            width="50%"
+          >
+            <a-spin
+              :tip="data.tab6.selectData.spinningTip"
+              :spinning="data.tab6.selectData.spinning"
+            >
+              <a-form
+                ref="tab6SelectDataFormRef"
+                :model="data.tab6.selectData.form"
+                :rules="data.tab6.selectData.rules"
+                :label-col="data.tab6.selectData.labelCol"
+                :wrapper-col="data.tab6.selectData.wrapperCol"
+              >
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item
+                      label="sql语句"
+                      name="ecShowTypeSql"
+                      validateTrigger=""
+                      :hasFeedback="true"
+                    >
+                      <Codemirror
+                        style="flex: 1; font-size: 14px"
+                        v-model:value="data.tab6.selectData.form.ecShowTypeSql"
+                        :options="data.tab6.selectData.options"
+                        border
+                        height="150px"
+                      />
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+                <a-row>
+                  <a-col :span="24">
+                    <a-form-item label="备注">
+                      <template
+                        v-if="
+                          data.tab6.form.ecShowType === '3' ||
+                          data.tab6.form.ecShowType === '4'
+                        "
+                      >
+                        <span>必须包含name，code，其中name和code都得用英文单引号括起来。</span>
+                        <br />
+                        <span
+                          >例： <br />select '是' name , '1' code from dual
+                          <br />union all <br />select '否' name , '0' code from
+                          dual
+                        </span>
+                      </template>
+                      <template v-if="data.tab6.form.ecShowType === '5'">
+                        <span
+                          >必须包含title，id，key，parentId。key和id值不可重复需保持唯一性。title为树形名称，id为节点id，parentId为父级id，顶级节点的父级id必须为0，key为传入后台的值。</span
+                        >
+                        <br />
+                        <span
+                          >例： <br />SELECT '湖北省' title,'1' id, '420000'
+                          key,'0' parentId from dual <br />union all
+                          <br />SELECT '武汉市' title,'2' id, '420100' key,'1'
+                          parentId from dual
+                        </span>
+                      </template>
+                    </a-form-item>
+                  </a-col>
+                </a-row>
+              </a-form>
+            </a-spin>
+          </a-modal>
+        </a-spin>
+      </a-tab-pane>
+    </a-tabs>
+  </a-drawer>
+  <a-drawer
+    title="菜单配置"
+    placement="right"
+    width="50%"
+    v-model:visible="menuDrawer.visible"
+  >
+    <div
+      :style="{
+        position: 'absolute',
+        bottom: 0,
+        width: '100%',
+        borderTop: '1px solid #e8e8e8',
+        padding: '10px 16px',
+        textAlign: 'right',
+        left: 0,
+        background: '#fff',
+        borderRadius: '0 0 4px 4px',
+      }"
+    >
+      <a-button style="margin-right: 8px" @click="onDrawerCancel"
+        >取消</a-button
+      >
+      <a-button type="primary" @click="onSubmit">保存</a-button>
+    </div>
+
+    <a-form
+      ref="drawerFormRef"
+      :rules="drawerRules"
+      :model="drawerForm"
+      :label-col="{ span: 4 }"
+      :wrapper-col="{ span: 20 }"
+    >
+      <a-form-item label="上级菜单" name="parentId">
+        <a-tree-select
+          :dropdownStyle="{
+            maxHeight: '300px',
+          }"
+          v-model:value="drawerForm.parentId"
+          :replace-fields="{
+            label: 'menuName',
+            value: 'id',
+          }"
+          :tree-data="menuDrawer.treeData"
+        >
+          <template #icon="item">
+            <a-icon :type="item.navIcon" />
+          </template>
+        </a-tree-select>
+      </a-form-item>
+      <a-form-item label="菜单名称" name="menuName">
+        <a-input v-model:value="drawerForm.menuName" />
+      </a-form-item>
+      <a-form-item label="导航图标" name="navIcon">
+        <a-icon-select v-model:value="drawerForm.navIcon" />
+      </a-form-item>
+      <a-form-item label="排序" name="orderNo">
+        <a-input v-model:value="drawerForm.orderNo" />
+      </a-form-item>
+    </a-form>
+  </a-drawer>
+  <a-modal
+      v-model:visible="data.uploadVisible"
+      title="自定义表单导入"
+      @cancel="handleImportCancel"
+      width="800px"
+      :footer="null"
+      destroyOnClose>
+          <a-upload-dragger
+            name="file"
+            v-model:fileList="fileList"
+            :multiple="false"
+            :data="{}"
+            :action="TSHttp.CONTEXT_PATH + '/systool/customform/eformInfo/import'"
+            :headers="data.headers"
+            :beforeUpload="handleBeforeImport"
+            @change="handleImportChange">
+            <p class="ant-upload-drag-icon">
+              <inbox-outlined></inbox-outlined>
+            </p>
+            <p class="ant-upload-text">点击或拖动文件到此区域以上传</p>
+          </a-upload-dragger>
+  </a-modal>
+</template>
+<script lang="ts">
+import { defineComponent, onBeforeMount, onMounted, reactive, ref } from "vue";
+import { message, Modal } from "ant-design-vue";
+import TSHttp, { ContentType } from "../../../utils/TSHttp";
+import { cloneDeep } from "lodash-es";
+import {
+  DeleteOutlined,
+  EyeInvisibleOutlined,
+  FundViewOutlined,
+  EyeOutlined,
+  FormOutlined,
+  PlusCircleOutlined,
+  SearchOutlined,
+  SyncOutlined,
+  ToolOutlined,
+  InboxOutlined,
+  DownloadOutlined,
+  UploadOutlined,
+} from "@ant-design/icons-vue";
+import { RuleObject } from "ant-design-vue/lib/form/interface";
+import editableCell from "./EditableCell.vue";
+import eitableButtonCell from "./EditableButtonCell.vue";
+import customPreview from "./CustomPreview.vue";
+import Codemirror from "codemirror-editor-vue3";
+import "codemirror/mode/javascript/javascript.js"; // language
+import "codemirror/theme/dracula.css"; // theme
+import clipboard3 from "vue-clipboard3";
+import {
+  getMenusList,
+  getMenusAdd,
+  getMenusDetail,
+  getMenusUpdate,
+} from "@/api/sys/index";
+
+interface FileItemResponse {
+  success: boolean;
+  code?: number;
+  msg?: string;
+}
+
+interface FileItem {
+  uid: string;
+  name?: string;
+  status?: string;
+  response?: FileItemResponse;
+  url?: string;
+}
+
+interface FileInfo {
+  file: FileItem;
+  fileList: FileItem[];
+}
+
+export default defineComponent({
+  components: {
+    SearchOutlined,
+    PlusCircleOutlined,
+    FormOutlined,
+    EyeOutlined,
+    EyeInvisibleOutlined,
+    FundViewOutlined,
+    DeleteOutlined,
+    InboxOutlined,
+    DownloadOutlined,
+    UploadOutlined,
+    SyncOutlined,
+    editableCell,
+    eitableButtonCell,
+    customPreview,
+    Codemirror,
+    ToolOutlined,
+  },
+  setup() {
+    const toolbarItems = [
+      {
+        icon: "add",
+        text: "新增",
+        click: () => {
+          onAdd();
+        },
+      },
+      {
+        icon: "update",
+        text: "修改",
+        click: () => {
+          onUpdate();
+        },
+      },
+      {
+        icon: "remove",
+        text: "删除",
+        click: () => {
+          onDelete();
+        },
+      },
+      {
+        icon: "publish",
+        text: "发布",
+        click: () => {
+          publish();
+        },
+      },
+      {
+        icon: "unPublish",
+        text: "取消发布",
+        click: () => {
+          unPublish();
+        },
+      },
+      {
+        icon: "outInterface",
+        text: "对外接口",
+        click: () => {
+          outInterface();
+        },
+      },
+      {
+        icon: "bindingMenu",
+        text: "绑定菜单",
+        click: () => {
+          bindingMenu();
+        },
+      }, {
+        icon: "exporttofile",
+        text: "导出",
+        click: () => {
+          exportToFile();
+        }
+      }, {
+        icon: "importfromfile",
+        text: "导入",
+        click: () => {
+          importFromFile();
+        }
+      }
+    ];
+
+    // 校验tab1 cfNeedNm唯一
+    const checkCfNeedNm = async (rule: RuleObject, value: string) => {
+      if (value === "" || value === null || value === undefined) {
+        return Promise.reject("请输入需求名称");
+      } else {
+        let res = await TSHttp.post(
+          "/systool/customform/eformInfo/checkCfNeedNm",
+          {
+            cfId: data.tab1.form.cfId,
+            cfNeedNm: value,
+          }
+        );
+        if (res.success) {
+          if (!res.data) {
+            return Promise.reject("需求名称已存在，请重新新输入");
+          }
+        } else {
+          message.error(res.msg);
+        }
+      }
+    };
+
+    const cfDtlBindNameChange = () => {
+      if (
+        data.tab1.form.cfDtlBindName == "" ||
+        data.tab1.form.cfDtlBindName == undefined ||
+        data.tab1.form.cfDtlBindName == null
+      ) {
+        data.tab1.form.cfDtlBindPage = "";
+      }
+    };
+
+    //tab2工具栏
+    const tab2ToolbarItems = [
+      {
+        icon: "sync",
+        text: "同步",
+        click: () => {
+          Modal.confirm({
+            title: () => "同步会重置配置信息，确认同步?",
+            onOk() {
+              syncTab2();
+            },
+          });
+        },
+      },
+    ];
+    const tab3ToolbarItems = [
+      {
+        icon: "reset",
+        text: "重置",
+        click: () => {
+          Modal.confirm({
+            title: () => "确认重置?",
+            onOk() {
+              resetTab3();
+            },
+          });
+        },
+      },
+    ];
+    const tab4ToolbarItems = [
+      {
+        icon: "reset",
+        text: "重置",
+        click: () => {
+          Modal.confirm({
+            title: () => "确认重置?",
+            onOk() {
+              resetTab4();
+              data.tab4.table.selectedRowKeys = [];
+              data.tab4.table.selectedRows = [];
+            },
+          });
+        },
+      },
+      {
+        icon: "add",
+        text: "新增条件",
+        click: () => {
+          //关联tab1的表单ID
+          data.tab4.form.ecEformId = data.tab1.form.cfId;
+          data.tab4.isShowForm = true;
+          data.tab4.form.ecShowType = "1";
+          data.tab4.form.ecQueryType = "=";
+          data.tab4.form.ecDefltValFlg = "N";
+          data.tab4.form.ecConditionIsshow = "1";
+          data.tab4.formVisible = true;
+          data.tab4.table.selectedRowKeys = [];
+          data.tab4.table.selectedRows = [];
+          //排序字段+1
+          if (data.tab4.table.tableList.length > 0) {
+            let end = data.tab4.table.tableList.slice(-1);
+            let orderNo = end[0].ecIsShowOrder;
+            if (!isNaN(orderNo)) {
+              data.tab4.form.ecIsShowOrder = orderNo + 1;
+            }
+          }
+        },
+      },
+      {
+        icon: "remove",
+        text: "删除",
+        click: () => {
+          if (data.tab4.table.selectedRows.length === 0) {
+            message.warning("请选择记录");
+            return;
+          }
+          Modal.confirm({
+            title: () => "确实要删除选择的记录吗?",
+            onOk() {
+              removeTab4();
+              data.tab4.table.selectedRowKeys = [];
+              data.tab4.table.selectedRows = [];
+            },
+          });
+        },
+      },
+    ];
+    const tab5ToolbarItems = [
+      {
+        icon: "reset",
+        text: "重置",
+        click: () => {
+          Modal.confirm({
+            title: () => "确认重置?",
+            onOk() {
+              resetTab5();
+              data.tab5.table.selectedRowKeys = [];
+              data.tab5.table.selectedRows = [];
+            },
+          });
+        },
+      },
+      {
+        icon: "add",
+        text: "新增条件",
+        click: () => {
+          //关联tab1的表单ID
+          data.tab5.form.ecEformId = data.tab1.form.cfId;
+          data.tab5.isShowForm = true;
+          data.tab5.formVisible = true;
+          data.tab5.form.ecShowType = "1";
+          data.tab5.form.ecIsRequired = "N";
+          data.tab5.form.ecDefltValFlg = "N";
+          data.tab5.form.ecConditionIsshow = "1";
+          data.tab5.table.selectedRowKeys = [];
+          data.tab5.table.selectedRows = [];
+          //排序字段+1
+          if (data.tab5.table.tableList.length > 0) {
+            let end = data.tab5.table.tableList.slice(-1);
+            let orderNo = end[0].ecIsShowOrder;
+            if (!isNaN(orderNo)) {
+              data.tab5.form.ecIsShowOrder = orderNo + 1;
+            }
+          }
+        },
+      },
+      {
+        icon: "remove",
+        text: "删除",
+        click: () => {
+          if (data.tab5.table.selectedRows.length === 0) {
+            message.warning("请选择记录");
+            return;
+          }
+          Modal.confirm({
+            title: () => "确实要删除选择的记录吗?",
+            onOk() {
+              removeTab5();
+              data.tab5.table.selectedRowKeys = [];
+              data.tab5.table.selectedRows = [];
+            },
+          });
+        },
+      },
+    ];
+    const tab6ToolbarItems = [
+      {
+        icon: "reset",
+        text: "重置",
+        click: () => {
+          Modal.confirm({
+            title: () => "确认重置?",
+            onOk() {
+              resetTab6();
+              data.tab6.table.selectedRowKeys = [];
+              data.tab6.table.selectedRows = [];
+            },
+          });
+        },
+      },
+      {
+        icon: "add",
+        text: "新增条件",
+        click: () => {
+          //关联tab1的表单ID
+          data.tab6.form.ecEformId = data.tab1.form.cfId;
+          data.tab6.isShowForm = true;
+          data.tab6.formVisible = true;
+          data.tab6.form.ecShowType = "1";
+          data.tab6.form.ecIsRequired = "N";
+          data.tab6.form.ecIsEditor = "Y";
+          data.tab6.table.selectedRowKeys = [];
+          data.tab6.table.selectedRows = [];
+          //排序字段+1
+          if (data.tab6.table.tableList.length > 0) {
+            let end = data.tab6.table.tableList.slice(-1);
+            let orderNo = end[0].ecIsShowOrder;
+            if (!isNaN(orderNo)) {
+              data.tab6.form.ecIsShowOrder = orderNo + 1;
+            }
+          }
+        },
+      },
+      {
+        icon: "remove",
+        text: "删除",
+        click: () => {
+          if (data.tab6.table.selectedRows.length === 0) {
+            message.warning("请选择记录");
+            return;
+          }
+          Modal.confirm({
+            title: () => "确实要删除选择的记录吗?",
+            onOk() {
+              removeTab6();
+              data.tab6.table.selectedRowKeys = [];
+              data.tab6.table.selectedRows = [];
+            },
+          });
+        },
+      },
+    ];
+
+    //校验默认值SQL的正确性
+    let validateSql = async (rule: RuleObject, value: string) => {
+      data.tab4.select.spinningTip = "正在校验SQL...";
+      data.tab4.select.spinning = true;
+      let res = await TSHttp.post(
+        "/systool/customform/sql/isParaDefltVal",
+        {
+          dataSrc: data.tab1.form.cfDataSrc,
+          sql: value,
+          type: "",
+        },
+        ContentType.APPLICATION_FORM_URLENCODED
+      ).then((res) => {
+        data.tab4.select.spinningTip = "Loading...";
+        data.tab4.select.spinning = false;
+        if (res.success) {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(res.msg);
+        }
+      });
+    };
+
+    //校验默认值SQL的正确性
+    let validateSqlTab5 = async (rule: RuleObject, value: string) => {
+      data.tab5.select.spinningTip = "正在校验SQL...";
+      data.tab5.select.spinning = true;
+      let res = await TSHttp.post(
+        "/systool/customform/sql/isParaDefltVal",
+        {
+          dataSrc: data.tab1.form.cfDataSrc,
+          sql: value,
+          type: "",
+        },
+        ContentType.APPLICATION_FORM_URLENCODED
+      ).then((res) => {
+        data.tab5.select.spinningTip = "Loading...";
+        data.tab5.select.spinning = false;
+        if (res.success) {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(res.msg);
+        }
+      });
+    };
+
+    //校验显示类型数据SQL的正确性
+    let validateTab2DataSql = async (rule: RuleObject, value: string) => {
+      data.tab2.selectData.spinningTip = "正在校验SQL...";
+      data.tab2.selectData.spinning = true;
+      let res = await TSHttp.post(
+        "/systool/customform/sql/isParameterTree",
+        {
+          dataSrc: data.tab1.form.cfDataSrc,
+          sql: value,
+          type: data.tab2.fdDatatype,
+        },
+        ContentType.APPLICATION_FORM_URLENCODED
+      ).then((res) => {
+        data.tab2.selectData.spinningTip = "Loading...";
+        data.tab2.selectData.spinning = false;
+        if (res.success) {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(res.msg);
+        }
+      });
+    };
+
+    //校验显示类型数据SQL的正确性
+    let validateTab4DataSql = async (rule: RuleObject, value: string) => {
+      data.tab4.selectData.spinningTip = "正在校验SQL...";
+      data.tab4.selectData.spinning = true;
+      let res = await TSHttp.post(
+        "/systool/customform/sql/isParameterTree",
+        {
+          dataSrc: data.tab1.form.cfDataSrc,
+          sql: value,
+          type: data.tab4.form.ecShowType,
+        },
+        ContentType.APPLICATION_FORM_URLENCODED
+      ).then((res) => {
+        data.tab4.selectData.spinningTip = "Loading...";
+        data.tab4.selectData.spinning = false;
+        if (res.success) {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(res.msg);
+        }
+      });
+    };
+
+    //校验显示类型数据SQL的正确性
+    let validateTab5DataSql = async (rule: RuleObject, value: string) => {
+      data.tab5.selectData.spinningTip = "正在校验SQL...";
+      data.tab5.selectData.spinning = true;
+      let res = await TSHttp.post(
+        "/systool/customform/sql/isParameterTree",
+        {
+          dataSrc: data.tab1.form.cfDataSrc,
+          sql: value,
+          type: data.tab5.form.ecShowType,
+        },
+        ContentType.APPLICATION_FORM_URLENCODED
+      ).then((res) => {
+        data.tab5.selectData.spinningTip = "Loading...";
+        data.tab5.selectData.spinning = false;
+        if (res.success) {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(res.msg);
+        }
+      });
+    };
+
+    //校验显示类型数据SQL的正确性
+    let validateTab6DataSql = async (rule: RuleObject, value: string) => {
+      data.tab6.selectData.spinningTip = "正在校验SQL...";
+      data.tab6.selectData.spinning = true;
+      let res = await TSHttp.post(
+        "/systool/customform/sql/isParameterTree",
+        {
+          dataSrc: data.tab1.form.cfDataSrc,
+          sql: value,
+          type: data.tab6.form.ecShowType,
+        },
+        ContentType.APPLICATION_FORM_URLENCODED
+      ).then((res) => {
+        data.tab6.selectData.spinningTip = "Loading...";
+        data.tab6.selectData.spinning = false;
+        if (res.success) {
+          return Promise.resolve();
+        } else {
+          return Promise.reject(res.msg);
+        }
+      });
+    };
+
+    const data = reactive({
+      uploadVisible: false,
+      headers: {
+        Authorization: "Bearer " + sessionStorage.getItem("access_token"),
+        logicSysNo: 'logicSysNo' + sessionStorage.getItem("logicSysNo"),
+        IsAdmin: 'isAdmin' + sessionStorage.getItem("isAdmin")
+      },
+      //自定义表单
+      custom: {
+        tableList: [],
+        labelCol: {
+          span: 5,
+        },
+        wrapperCol: {
+          span: 15,
+        },
+        //自定义表单列
+        columns: [
+          {
+            title: "序号",
+            dataIndex: "index",
+            align: "center",
+            width: 60,
+            customRender: ({ index }: any) => index + 1,
+          },
+          {
+            title: "查询号",
+            dataIndex: "cfQueryCode",
+            key: "cfQueryCode",
+            width: 320,
+            align: "center",
+            ellipsis: true,
+          },
+          {
+            title: "需求名称",
+            dataIndex: "cfNeedNm",
+            key: "cfNeedNm",
+            width: 320,
+            align: "center",
+            ellipsis: true,
+          },
+          {
+            title: "描述",
+            dataIndex: "cfDsc",
+            key: "cfDsc",
+            width: 320,
+            align: "center",
+            ellipsis: true,
+          },
+          {
+            title: "是否完成",
+            dataIndex: "cfStat",
+            key: "cfStat",
+            width: 120,
+            align: "center",
+            slots: { customRender: "cfStat" },
+            ellipsis: true,
+          },
+          {
+            title: "操作",
+            dataIndex: "action",
+            key: "action",
+            fixed: "right",
+            align: "center",
+            width: 120,
+            slots: { customRender: "action" },
+            ellipsis: true,
+          },
+        ],
+        searchForm: {
+          cfQueryCode: "",
+          cfNeedNm: "",
+          cfStat: null,
+        },
+        tableLoading: false,
+        pagination: {
+          total: 0,
+          current: 1,
+          pageSize: 10,
+          showTotal: (total: number) => `共 ${total} 条数据`,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50"],
+        },
+        selectedRowKeys: [],
+        selectedRows: [],
+        visible: false, //新增、修改窗口
+        previewVisible: false, //预览窗口
+        previewId: "", //预览ID
+        btnType: "add",
+        modalTitle: "新增",
+      },
+      tabActiveKey: "1", //tab默认激活页面
+      tabDisable: true, //tab禁用标志
+      buttonStyle: {
+        width: "100%",
+        marginTop: "20px",
+        borderTop: "1px solid #e9e9e9",
+        padding: "10px 16px",
+        background: "#fff",
+        textAlign: "right",
+        zIndex: 1,
+      },
+      tab1: {
+        spinning: false,
+        //第一页表单
+        form: {
+          cfId: "",
+          cfNeedNm: "",
+          cfDataSrc: "",
+          cfTabNam: "",
+          cfDtlBindPage: "",
+          cfDtlBindName: "",
+          cfDsc: "",
+          cfDblCheck: "N",
+        },
+        labelCol: {
+          span: 8,
+        },
+        wrapperCol: {
+          span: 16,
+        },
+        // 表单校验规则
+        rules: {
+          cfNeedNm: [{ required: true, validator: checkCfNeedNm }],
+          cfDataSrc: [{ required: true, message: "请选择数据源" }],
+          cfTabNam: [{ required: true, message: "请选择表名称" }],
+          cfDblCheck: [{ required: true, message: "请选择是否双人核准" }],
+        },
+        FormRules: [],
+        dsSelect: [], //数据源
+        visibleTables: false, //物理表窗口
+        visiblePages: false, //页面选择窗口
+        table: {
+          labelCol: {
+            span: 5,
+          },
+          wrapperCol: {
+            span: 15,
+          },
+          selectedRowKeys: [],
+          selectedRows: [],
+          tableList: [],
+          searchForm: {
+            tableName: "",
+            tableComment: "",
+          },
+          tableLoading: false,
+          columns: [
+            //物理表列
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 60,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "表名",
+              dataIndex: "tableName",
+              key: "tableName",
+              width: 320,
+              align: "center",
+            },
+            {
+              title: "注释",
+              dataIndex: "tableComment",
+              key: "tableComment",
+              align: "center",
+            },
+          ],
+          pagination: {
+            total: 0,
+            current: 1,
+            pageSize: 10,
+            showTotal: (total: number) => `共 ${total} 条数据`,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50"],
+          },
+        },
+        page: {
+          labelCol: {
+            span: 5,
+          },
+          wrapperCol: {
+            span: 15,
+          },
+          selectedRowKeys: [],
+          selectedRows: [],
+          tableList: [],
+          searchForm: {
+            cfQueryCode: "",
+            cfNeedNm: "",
+          },
+          tableLoading: false,
+          columns: [
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 60,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "查询号",
+              dataIndex: "cfQueryCode",
+              key: "cfQueryCode",
+              width: 320,
+              align: "center",
+            },
+            {
+              title: "需求名称",
+              dataIndex: "cfNeedNm",
+              key: "cfNeedNm",
+              width: 320,
+              align: "center",
+            },
+            {
+              title: "描述",
+              dataIndex: "cfDsc",
+              key: "cfDsc",
+              width: 320,
+              align: "center",
+            },
+            {
+              title: "是否完成",
+              dataIndex: "cfStat",
+              key: "cfStat",
+              width: 120,
+              align: "center",
+              slots: { customRender: "cfStat" },
+            },
+          ],
+          pagination: {
+            total: 0,
+            current: 1,
+            pageSize: 10,
+            showTotal: (total: number) => `共 ${total} 条数据`,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "20", "50"],
+          },
+        },
+      },
+      tab2: {
+        table: {
+          tableList: [],
+          tableCols: [],
+          tableLoading: false,
+          columns: [
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 60,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "字段显示名称",
+              dataIndex: "fdFieldShowdesc",
+              width: 240,
+              align: "center",
+              slots: { customRender: "fdFieldShowdesc" },
+            },
+            {
+              title: "字段名称",
+              dataIndex: "fdFieldName",
+              width: 240,
+              align: "center",
+              slots: { customRender: "fdFieldName" },
+            },
+            {
+              title: "是否显示",
+              dataIndex: "fdFieldIsshow",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdFieldIsshow" },
+            },
+            {
+              title: "展示顺序",
+              dataIndex: "fdShowOrder",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdShowOrder" },
+            },
+            {
+              title: "对齐方式",
+              dataIndex: "fdFieldAlign",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdFieldAlign" },
+            },
+            {
+              title: "列宽度",
+              dataIndex: "fdFieldWidth",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdFieldWidth" },
+            },
+            {
+              title: "显示类型",
+              dataIndex: "fdDatatype",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdDatatype" },
+            },
+            // {
+            //   title: '字段类型',
+            //   dataIndex: 'fdFieldType',
+            //   width: 180,
+            //   align: 'center',
+            //   slots: {customRender: 'fdFieldType'}
+            // },
+            {
+              title: "排序方式",
+              dataIndex: "fdOrderby",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdOrderby" },
+            },
+            {
+              title: "是否主键",
+              dataIndex: "fdIspk",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdIspk" },
+            },
+            {
+              title: "是否详情条件",
+              dataIndex: "fdIsDtlCondition",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdIsDtlCondition" },
+            },
+            {
+              title: "是否附件条件",
+              dataIndex: "fdIsFieldCondition",
+              width: 180,
+              align: "center",
+              slots: { customRender: "fdIsFieldCondition" },
+            },
+          ],
+          editColumns: [
+            {
+              editColumn: "fdFieldShowdesc",
+              editType: "input",
+              mapFunc: null,
+              option: null,
+            },
+            // {
+            //   editColumn: 'fdFieldName',
+            //   editType: "input",
+            //   mapFunc: null,
+            //   option: null,
+            // },
+            {
+              editColumn: "fdFieldIsshow",
+              editType: "select",
+              paramTypeNo: "show",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.fdFieldIsshow);
+              },
+            },
+            {
+              editColumn: "fdShowOrder",
+              editType: "number",
+              mapFunc: null,
+              option: null,
+            },
+            {
+              editColumn: "fdFieldAlign",
+              editType: "select",
+              paramTypeNo: "alignType",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.fdFieldAlign);
+              },
+            },
+            {
+              editColumn: "fdFieldWidth",
+              editType: "number",
+              mapFunc: null,
+              option: null,
+            },
+            {
+              editColumn: "fdDatatype",
+              editType: "select",
+              paramTypeNo: "viewShowType",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                //如果是下拉框
+                if (
+                  editableData.fdDatatype === "3" ||
+                  editableData.fdDatatype === "4" ||
+                  editableData.fdDatatype === "5"
+                ) {
+                  if (
+                    editableData.fdDatatype === "3" ||
+                    editableData.fdDatatype === "4"
+                  ) {
+                    data.tab2.selectData.title = "配置下拉框数据";
+                  } else if (editableData.ecShowType === "5") {
+                    data.tab2.selectData.title = "配置树形结构数据";
+                  }
+                  data.tab2.fdDatatype = editableData.fdDatatype;
+                  data.tab2.selectData.form.fdId = editableData.fdId;
+                  data.tab2.selectData.form.fdSysValue =
+                    editableData.fdSysValue == null
+                      ? ""
+                      : editableData.fdSysValue;
+                  data.tab2.selectData.visible = true;
+                }
+              },
+            },
+            {
+              editColumn: "fdOrderby",
+              editType: "select",
+              paramTypeNo: "orderBy",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.fdOrderby);
+              },
+            },
+            {
+              editColumn: "fdIspk",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.fdIspk);
+              },
+            },
+            {
+              editColumn: "fdIsDtlCondition",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.fdIsDtlCondition);
+              },
+            },
+            {
+              editColumn: "fdIsFieldCondition",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.fdIsFieldCondition);
+              },
+            },
+          ],
+        },
+        spinning: false,
+        fdDatatype: null, //区分备注用
+        selectData: {
+          title: "SQL数据",
+          visible: false,
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          form: {
+            fdId: "",
+            fdSysValue: "",
+          },
+          rules: {
+            fdSysValue: [
+              { required: true, message: "SQL不能为空" },
+              { validator: validateTab2DataSql },
+            ],
+          },
+          labelCol: {
+            span: 3,
+          },
+          wrapperCol: {
+            span: 21,
+          },
+        },
+      },
+      tab3: {
+        table: {
+          originalTableList: [],
+          tableList: [],
+          tableLoading: false,
+          columns: [
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 50,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "按钮编号",
+              dataIndex: "ebButtonId",
+              key: "ebButtonId",
+              width: 450,
+              align: "center",
+            },
+            {
+              title: "按钮名称",
+              dataIndex: "ebButtonName",
+              key: "ebButtonName",
+              width: 250,
+              align: "center",
+            },
+            {
+              title: "是否显示",
+              dataIndex: "ebShowType",
+              key: "ebShowType",
+              width: 250,
+              align: "center",
+              slots: { customRender: "ebShowType" },
+            },
+            {
+              title: "是否配置",
+              dataIndex: "ebIsEdit",
+              key: "ebIsEdit",
+              width: 250,
+              align: "center",
+              slots: { customRender: "ebIsEdit" },
+            },
+          ],
+          editColumns: [
+            {
+              editColumn: "ebShowType",
+              editType: "select",
+              paramTypeNo: "show",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ebShowType);
+              },
+            },
+            {
+              editColumn: "ebIsEdit",
+              editType: "select",
+              paramTypeNo: "configure",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                if ("Y" === editableData.ebIsEdit) {
+                  data.tab3.select.form.ebId = editableData.ebId;
+                  data.tab3.select.form.ebEformId = editableData.ebEformId;
+                  data.tab3.select.form.ebButtonId = editableData.ebButtonId;
+                  data.tab3.select.form.ebButtonName = editableData.ebButtonName;
+                  if(data.tab3.select.form.ebButtonId === 'buttonAdd' || data.tab3.select.form.ebButtonId === 'buttonEdit'){
+                    if(null != editableData.ebEditContent && "" !== editableData.ebEditContent){
+                      let procConfig = JSON.parse(editableData.ebEditContent);
+                      data.tab3.select.form.ebDatasource = procConfig.datasource;
+                      data.tab3.select.form.ebProcName = procConfig.procedure;
+                    }else{
+                      data.tab3.select.form.ebDatasource = '';
+                      data.tab3.select.form.ebProcName = '';
+                    }
+                  }else{
+                    data.tab3.select.form.ebEditContent = editableData.ebEditContent;
+                  }
+                  data.tab3.selectVisible = true;
+                }
+              },
+            },
+          ],
+        },
+        spinning: false,
+        formVisible: false,
+        selectVisible: false,
+        isShowForm: true, //是否回弹form窗口
+        dataSources: [],
+        select: {
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          labelCol: {
+            span: 4,
+          },
+          wrapperCol: {
+            span: 20,
+          },
+          form: {
+            ebId: "", //主键
+            ebEformId: "", //表单Id
+            ebButtonId: "", //按钮编号
+            ebButtonName: "", //按钮名称
+            ebShowType: "", //显示方式： 1显示 0不显示
+            ebIsEdit: "", //是否配置    Y:是  N:否
+            ebEditContent: "", //配置信息
+            ebDatasource: "",
+            ebProcName: "",
+          },
+        },
+        form: {
+          ebEditContent: "", //配置信息
+        },
+      },
+      tab4: {
+        table: {
+          selectedRowKeys: [],
+          selectedRows: [],
+          originalTableList: [],
+          tableList: [],
+          tableLoading: false,
+          columns: [
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 50,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "显示字段名称",
+              dataIndex: "ecShowFieldName",
+              key: "ecShowFieldName",
+              width: 200,
+              align: "center",
+              slots: { customRender: "ecShowFieldName" },
+            },
+            {
+              title: "字段名称",
+              dataIndex: "ecFieldName",
+              key: "ecFieldName",
+              width: 200,
+              align: "center",
+              slots: { customRender: "ecFieldName" },
+            },
+            {
+              title: "排序",
+              dataIndex: "ecIsShowOrder",
+              key: "ecIsShowOrder",
+              width: 100,
+              align: "center",
+              slots: { customRender: "ecIsShowOrder" },
+            },
+            {
+              title: "显示类型",
+              dataIndex: "ecShowType",
+              key: "ecShowType",
+              width: 120,
+              align: "center",
+              slots: { customRender: "ecShowType" },
+            },
+            {
+              title: "查询类型",
+              dataIndex: "ecQueryType",
+              key: "ecQueryType",
+              width: 120,
+              align: "center",
+              slots: { customRender: "ecQueryType" },
+            },
+            {
+              title: "存在默认值",
+              dataIndex: "ecDefltValFlg",
+              key: "ecDefltValFlg",
+              width: 120,
+              align: "center",
+              slots: { customRender: "ecDefltValFlg" },
+            },
+            {
+              title: "是否显示",
+              dataIndex: "ecConditionIsshow",
+              key: "ecConditionIsshow",
+              width: 120,
+              align: "center",
+              slots: { customRender: "ecConditionIsshow" },
+            },
+          ],
+          editColumns: [
+            // {
+            //   editColumn: 'ecShowFieldName',
+            //   editType: "input",
+            //   mapFunc: null,
+            //   option: null,
+            // },
+            {
+              editColumn: "ecFieldName",
+              editType: "input",
+              mapFunc: null,
+              option: null,
+            },
+            {
+              editColumn: "ecDefltValFlg",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                if (editableData.ecDefltValFlg === "Y") {
+                  data.tab4.select.form.ecId = editableData.ecId;
+                  data.tab4.select.form.ecDefltVal =
+                    editableData.ecDefltVal == null
+                      ? ""
+                      : editableData.ecDefltVal;
+                  data.tab4.selectVisible = true;
+                  data.tab4.isShowForm = false;
+                }
+              },
+            },
+            {
+              editColumn: "ecIsShowOrder",
+              editType: "number",
+              mapFunc: null,
+              option: null,
+            },
+            {
+              editColumn: "ecShowType",
+              editType: "select",
+              paramTypeNo: "searchShowType",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //如果是下拉框
+                if (
+                  editableData.ecShowType === "3" ||
+                  editableData.ecShowType === "4" ||
+                  editableData.ecShowType === "5"
+                ) {
+                  if (
+                    editableData.ecShowType === "3" ||
+                    editableData.ecShowType === "4"
+                  ) {
+                    data.tab4.selectData.title = "配置下拉框数据";
+                  } else if (editableData.ecShowType === "5") {
+                    data.tab4.selectData.title = "配置树形结构数据";
+                  }
+                  data.tab4.form.ecShowType = editableData.ecShowType;
+                  data.tab4.selectData.form.ecId = editableData.ecId;
+                  data.tab4.selectData.form.ecShowTypeSql =
+                    editableData.ecShowTypeSql == null
+                      ? ""
+                      : editableData.ecShowTypeSql;
+                  data.tab4.selectData.visible = true;
+                  data.tab4.isShowForm = false;
+                }
+              },
+            },
+            // {
+            //   editColumn: 'ecIsRequired',
+            //   editType: "select",
+            //   paramTypeNo: 'yesOrNo',
+            //   option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+            //   mapFunc: (paramTypeNo: string, key: string) => getSysParamName(paramTypeNo, key),
+            //   selectChange: function (editableData: any) {//select模式必须得有该方法
+            //     console.log(editableData.ecIsRequired);
+            //   }
+            // },
+            {
+              editColumn: "ecQueryType",
+              editType: "select",
+              paramTypeNo: "queryType",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ecQueryType);
+              },
+            },
+            {
+              editColumn: "ecConditionIsshow",
+              editType: "select",
+              paramTypeNo: "show",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ecConditionIsshow);
+              },
+            },
+          ],
+        },
+        spinning: false,
+        formVisible: false,
+        formSpinning: false,
+        selectVisible: false,
+        isShowForm: true, //是否回弹form窗口
+        select: {
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          labelCol: {
+            span: 3,
+          },
+          wrapperCol: {
+            span: 21,
+          },
+          form: {
+            ecId: "",
+            ecDefltVal: "",
+          },
+          rules: {
+            ecDefltVal: [
+              { required: true, message: "SQL不能为空" },
+              { validator: validateSql },
+            ],
+          },
+        },
+        selectData: {
+          title: "SQL数据",
+          visible: false,
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          form: {
+            ecId: "",
+            ecShowTypeSql: "",
+          },
+          ecShowType: null,
+          rules: {
+            ecShowTypeSql: [
+              { required: true, message: "SQL不能为空" },
+              { validator: validateTab4DataSql },
+            ],
+          },
+          labelCol: {
+            span: 3,
+          },
+          wrapperCol: {
+            span: 21,
+          },
+        },
+        form: {
+          ecId: "",
+          ecEformId: "",
+          ecShowFieldName: null, //字段值
+          ecFieldName: "", //字段注释
+          ecShowType: null,
+          ecShowTypeSql: "", //显示单选或多选的SQL数据
+          ecQueryType: null,
+          ecIsRequired: "",
+          ecIsShowOrder: 0,
+          ecDataType: "",
+          ecDefltValFlg: null,
+          ecDefltVal: "", //默认值SQL
+          ecConditionIsshow: "", //是否显示
+        },
+        rules: {
+          ecShowFieldName: [{ required: true, message: "请选择显示字段名称" }],
+          ecShowType: [{ required: true, message: "请选择显示类型" }],
+          ecQueryType: [{ required: true, message: "请选择查询类型" }],
+          ecDefltValFlg: [{ required: true, message: "请选择是否存在默认值" }],
+          ecConditionIsshow: [{ required: true, message: "请选择是否显示" }],
+          // ecIsRequired: [
+          //   {required: true, message: '请选择是否必填', }],
+        },
+        labelCol: {
+          span: 8,
+        },
+        wrapperCol: {
+          span: 16,
+        },
+      },
+      tab5: {
+        table: {
+          selectedRowKeys: [],
+          selectedRows: [],
+          originalTableList: [],
+          tableList: [],
+          tableLoading: false,
+          columns: [
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 50,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "显示字段名称",
+              dataIndex: "ecShowFieldName",
+              key: "ecShowFieldName",
+              width: 300,
+              align: "center",
+            },
+            {
+              title: "字段名称",
+              dataIndex: "ecFieldName",
+              key: "ecFieldName",
+              width: 300,
+              align: "center",
+            },
+            {
+              title: "排序",
+              dataIndex: "ecIsShowOrder",
+              key: "ecIsShowOrder",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecIsShowOrder" },
+            },
+            {
+              title: "显示类型",
+              dataIndex: "ecShowType",
+              key: "ecShowType",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecShowType" },
+            },
+            {
+              title: "是否必填",
+              dataIndex: "ecIsRequired",
+              key: "ecIsRequired",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecIsRequired" },
+            },
+            {
+              title: "存在默认值",
+              dataIndex: "ecDefltValFlg",
+              key: "ecDefltValFlg",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecDefltValFlg" },
+            },
+            {
+              title: "是否显示",
+              dataIndex: "ecConditionIsshow",
+              key: "ecConditionIsshow",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecConditionIsshow" },
+            },
+          ],
+          editColumns: [
+            {
+              editColumn: "ecIsShowOrder",
+              editType: "input",
+              mapFunc: null,
+              option: null,
+            },
+            {
+              editColumn: "ecShowType",
+              editType: "select",
+              paramTypeNo: "addShowType",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //如果是下拉框
+                if (
+                  editableData.ecShowType === "3" ||
+                  editableData.ecShowType === "4" ||
+                  editableData.ecShowType === "5"
+                ) {
+                  if (
+                    editableData.ecShowType === "3" ||
+                    editableData.ecShowType === "4"
+                  ) {
+                    data.tab5.selectData.title = "配置下拉框数据";
+                  } else if (editableData.ecShowType === "5") {
+                    data.tab5.selectData.title = "配置树形结构数据";
+                  }
+                  data.tab5.form.ecShowType = editableData.ecShowType;
+                  data.tab5.selectData.form.ecId = editableData.ecId;
+                  data.tab5.selectData.form.ecShowTypeSql =
+                    editableData.ecShowTypeSql == null
+                      ? ""
+                      : editableData.ecShowTypeSql;
+                  data.tab5.selectData.visible = true;
+                  data.tab5.isShowForm = false;
+                }
+              },
+            },
+            {
+              editColumn: "ecIsRequired",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ecIsRequired);
+              },
+            },
+            {
+              editColumn: "ecDefltValFlg",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                if (editableData.ecDefltValFlg === "Y") {
+                  data.tab5.select.form.ecId = editableData.ecId;
+                  data.tab5.select.form.ecDefltVal =
+                    editableData.ecDefltVal == null
+                      ? ""
+                      : editableData.ecDefltVal;
+                  data.tab5.selectVisible = true;
+                  data.tab5.isShowForm = false;
+                }
+              },
+            },
+            {
+              editColumn: "ecConditionIsshow",
+              editType: "select",
+              paramTypeNo: "show",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ecConditionIsshow);
+              },
+            },
+          ],
+        },
+        spinning: false,
+        formVisible: false,
+        isShowForm: true, //是否回弹form窗口
+        selectVisible: false,
+        select: {
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          labelCol: {
+            span: 3,
+          },
+          wrapperCol: {
+            span: 21,
+          },
+          form: {
+            ecId: "",
+            ecDefltVal: "",
+          },
+          rules: {
+            ecDefltVal: [
+              { required: true, message: "SQL不能为空" },
+              { validator: validateSqlTab5 },
+            ],
+          },
+        },
+        selectData: {
+          title: "SQL数据",
+          visible: false,
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          form: {
+            ecId: "",
+            ecShowTypeSql: "",
+          },
+          ecShowType: null,
+          rules: {
+            ecShowTypeSql: [
+              { required: true, message: "SQL不能为空" },
+              { validator: validateTab5DataSql },
+            ],
+          },
+          labelCol: {
+            span: 3,
+          },
+          wrapperCol: {
+            span: 21,
+          },
+        },
+        form: {
+          ecId: "",
+          ecEformId: "",
+          ecShowFieldName: null, //字段值
+          ecFieldName: "", //字段注释
+          ecShowType: null,
+          ecShowTypeSql: "", //显示单选或多选的SQL数据
+          ecQueryType: null,
+          ecIsRequired: null,
+          ecIsShowOrder: 0,
+          ecDataType: "",
+          ecDefltValFlg: null,
+          ecDefltVal: "", //默认值SQL
+          ecConditionIsshow: "", //是否显示
+        },
+        rules: {
+          ecShowFieldName: [{ required: true, message: "请选择字段名称" }],
+          ecShowType: [{ required: true, message: "请选择显示类型" }],
+          ecIsRequired: [{ required: true, message: "请选择是否必填" }],
+          ecDefltValFlg: [{ required: true, message: "请选择是否必填" }],
+          ecConditionIsshow: [{ required: true, message: "请选择是否显示" }],
+        },
+        labelCol: {
+          span: 8,
+        },
+        wrapperCol: {
+          span: 16,
+        },
+      },
+      tab6: {
+        table: {
+          selectedRowKeys: [],
+          selectedRows: [],
+          originalTableList: [],
+          tableList: [],
+          tableLoading: false,
+          columns: [
+            {
+              title: "序号",
+              dataIndex: "index",
+              align: "center",
+              width: 50,
+              customRender: ({ index }: any) => index + 1,
+            },
+            {
+              title: "显示字段名称",
+              dataIndex: "ecShowFieldName",
+              key: "ecShowFieldName",
+              width: 375,
+              align: "center",
+            },
+            {
+              title: "字段名称",
+              dataIndex: "ecFieldName",
+              key: "ecFieldName",
+              width: 375,
+              align: "center",
+            },
+            {
+              title: "排序",
+              dataIndex: "ecIsShowOrder",
+              key: "ecIsShowOrder",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecIsShowOrder" },
+            },
+            {
+              title: "显示类型",
+              dataIndex: "ecShowType",
+              key: "ecShowType",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecShowType" },
+            },
+            {
+              title: "是否必填",
+              dataIndex: "ecIsRequired",
+              key: "ecIsRequired",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecIsRequired" },
+            },
+            {
+              title: "是否编辑",
+              dataIndex: "ecIsEditor",
+              key: "ecIsEditor",
+              width: 150,
+              align: "center",
+              slots: { customRender: "ecIsEditor" },
+            },
+          ],
+          editColumns: [
+            {
+              editColumn: "ecIsShowOrder",
+              editType: "input",
+              mapFunc: null,
+              option: null,
+            },
+            {
+              editColumn: "ecShowType",
+              editType: "select",
+              paramTypeNo: "editShowType",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //如果是下拉框
+                if (
+                  editableData.ecShowType === "3" ||
+                  editableData.ecShowType === "4" ||
+                  editableData.ecShowType === "5"
+                ) {
+                  if (
+                    editableData.ecShowType === "3" ||
+                    editableData.ecShowType === "4"
+                  ) {
+                    data.tab6.selectData.title = "配置下拉框数据";
+                  } else if (editableData.ecShowType === "5") {
+                    data.tab6.selectData.title = "配置树形结构数据";
+                  }
+                  data.tab6.form.ecShowType = editableData.ecShowType;
+                  data.tab6.selectData.form.ecId = editableData.ecId;
+                  data.tab6.selectData.form.ecShowTypeSql =
+                    editableData.ecShowTypeSql == null
+                      ? ""
+                      : editableData.ecShowTypeSql;
+                  data.tab6.selectData.visible = true;
+                  data.tab6.isShowForm = false;
+                }
+              },
+            },
+            {
+              editColumn: "ecIsRequired",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ecIsRequired);
+              },
+            },
+            {
+              editColumn: "ecIsEditor",
+              editType: "select",
+              paramTypeNo: "yesOrNo",
+              option: (paramTypeNo: string) => sysParamInfo.value[paramTypeNo],
+              mapFunc: (paramTypeNo: string, key: string) =>
+                getSysParamName(paramTypeNo, key),
+              selectChange: function (editableData: any) {
+                //select模式必须得有该方法
+                console.log(editableData.ecIsEditor);
+              },
+            },
+          ],
+        },
+        spinning: false,
+        formVisible: false,
+        isShowForm: true, //是否回弹form窗口
+        selectData: {
+          title: "SQL数据",
+          visible: false,
+          spinning: false,
+          spinningTip: "Loading...",
+          options: {
+            mode: "text/javascript",
+            theme: "dracula",
+            lineNumbers: true,
+            smartIndent: true,
+            indentUnit: 2,
+            foldGutter: true,
+            styleActiveLine: true,
+          },
+          form: {
+            ecId: "",
+            ecShowTypeSql: "",
+          },
+          ecShowType: null,
+          rules: {
+            ecShowTypeSql: [
+              { required: true, message: "SQL不能为空" },
+              { validator: validateTab6DataSql },
+            ],
+          },
+          labelCol: {
+            span: 3,
+          },
+          wrapperCol: {
+            span: 21,
+          },
+        },
+        form: {
+          ecId: "",
+          ecEformId: "",
+          ecShowFieldName: null, //字段值
+          ecFieldName: "", //字段注释
+          ecShowType: null,
+          ecShowTypeSql: "", //显示单选或多选的SQL数据
+          ecQueryType: null,
+          ecIsRequired: null,
+          ecIsEditor: null,
+          ecDataType: "",
+          ecIsShowOrder: 0,
+          ecDefltValFlg: "",
+        },
+        rules: {
+          ecShowFieldName: [{ required: true, message: "请选择字段名称" }],
+          ecShowType: [{ required: true, message: "请选择显示类型" }],
+          ecIsRequired: [{ required: true, message: "请选择是否必填" }],
+          ecIsEditor: [{ required: true, message: "请选择是否编辑" }],
+        },
+        labelCol: {
+          span: 8,
+        },
+        wrapperCol: {
+          span: 16,
+        },
+      },
+    });
+
+    //主表单
+    const formRef = ref();
+    const tableFormRef = ref();
+    const pageFormRef = ref();
+    //tab1表单
+    const tab1FormRef = ref();
+    //tab4表单
+    const tab4FormRef = ref();
+    const tab5FormRef = ref();
+    const tab6FormRef = ref();
+    //tab2单、多选下拉框SQL
+    const tab2SelectDataFormRef = ref();
+    //tab3是否配置配置信息
+    const tab3SelectFormRef = ref();
+    //tab4默认值SQL表单
+    const tab4SelectFormRef = ref();
+    //tab4单、多选下拉框数据表单
+    const tab4SelectDataFormRef = ref();
+    //tab5默认值SQL表单
+    const tab5SelectFormRef = ref();
+    //tab5单、多选下拉框数据表单
+    const tab5SelectDataFormRef = ref();
+    //tab6单、多选下拉框数据表单
+    const tab6SelectDataFormRef = ref();
+    const fileList = ref([])
+    const foreignUpload = ref('')
+    onBeforeMount(() => {
+      //获取参数
+      getSysParamInfo();
+    });
+
+    //新增
+    const onAdd = () => {
+      data.custom.visible = true;
+      data.custom.btnType = "add";
+      data.custom.modalTitle = "新增";
+      getDsSelect(); //加载数据源下拉框
+    };
+
+    //修改
+    const onUpdate = () => {
+      if (data.custom.selectedRows.length === 0) {
+        message.warning("请选择记录");
+        return;
+      } else if (data.custom.selectedRows.length === 1) {
+        update(data.custom.selectedRows[0]);
+      } else {
+        message.warning("只能选择一条记录");
+        return;
+      }
+    };
+    //进入修改
+    const update = (record: any) => {
+      alert("22239999")
+      if (record.cfStat == "Y") {
+        message.warning("只能修改未发布记录");
+        return;
+      }
+      data.custom.visible = true;
+      data.custom.btnType = "update";
+      data.custom.modalTitle = "修改";
+      getDsSelect(); //加载数据源下拉框
+      queryTab1(data.custom.selectedRowKeys[0]); //加载tab1数据
+    };
+
+    const preview = (record: any) => {
+      data.custom.previewId = record.cfId;
+      data.custom.previewVisible = true;
+    };
+
+    const handleClosePreview = () => {
+      data.custom.previewVisible = false;
+    };
+
+    const queryTab1 = (cfId: string) => {
+      //加载需求配置tab1数据
+      data.tab1.spinning = true;
+      TSHttp.post("/systool/customform/eformInfo/queryTab1", {
+        id: cfId,
+      })
+        .then((res) => {
+          if (res.success && res.data) {
+            data.tabDisable = false; //保存tab1后开放后面tab
+            data.tab1.form.cfId = res.data.cfId;
+            data.tab1.form.cfNeedNm = res.data.cfNeedNm;
+            data.tab1.form.cfDataSrc = res.data.cfDataSrc;
+            data.tab1.form.cfTabNam = res.data.cfTabNam;
+            data.tab1.form.cfDtlBindPage = res.data.cfDtlBindPage;
+            data.tab1.form.cfDtlBindName = res.data.cfDtlBindName;
+            data.tab1.form.cfDsc = res.data.cfDsc;
+            data.tab1.form.cfDblCheck = res.data.cfDblCheck;
+          } else {
+            message.error(res.msg);
+          }
+          data.tab1.spinning = false;
+        })
+        .catch((err) => {
+          data.tab1.spinning = false;
+          console.log("error:" + err);
+        });
+    };
+
+    const sysParamInfo = ref<any>({});
+
+    //获取系统配置的参数
+    const getSysParamInfo = async () => {
+      data.custom.tableLoading = true;
+      await TSHttp.post(
+        "/admin/variable/params/getParamListByTypeNos",
+        [
+          "publish",
+          "show",
+          "alignType",
+          "searchShowType",
+          "editShowType",
+          "orderBy",
+          "yesOrNo",
+          "configure",
+          "queryType",
+        ],
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          data.custom.tableLoading = false;
+          if (res.success) {
+            sysParamInfo.value = res.data;
+            //先获取参数再去请求数据
+            getCustomList({
+              pageNum: data.custom.pagination.current,
+              pageSize: data.custom.pagination.pageSize,
+              ...data.custom.searchForm,
+            });
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err) => {
+          data.custom.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+
+    //翻译参数
+    const getSysParamName = (typeNo: string, value: string) => {
+      let paramName = value;
+      let params = sysParamInfo.value;
+      for (let key in params) {
+        if (key == typeNo) {
+          let array = params[key];
+          for (let obj of array) {
+            if (value == obj.paramValue) {
+              paramName = obj.paramName;
+              break;
+            }
+          }
+        }
+      }
+      return paramName;
+    };
+    //查询tab2所有字段信息
+    const queryTab2 = (cfId: string, cfDataSrc: string, cfTabNam: string) => {
+      //加载表格配置tab2数据
+      data.tab2.table.tableList = [];
+      data.tab2.table.tableLoading = true;
+      TSHttp.post("/systool/customform/tablefield/queryTab2", {
+        fdEformId: cfId,
+        cfDataSrc: cfDataSrc,
+        cfTabNam: cfTabNam,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab2.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: item.fdId };
+              }
+            );
+            data.tab2.table.tableCols = res.data.map(
+              (item: any, index: number) => {
+                return { key: item.fdFieldShowdesc, value: item.fdFieldName };
+              }
+            );
+            data.tab2.table.tableCols = data.tab2.table.tableCols.filter(
+              (item: any) => item.key != null
+            );
+          } else {
+            message.error(res.msg);
+          }
+          data.tab2.table.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab2.table.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+    const tab2ReceiveData = ({ tableData }) => {
+      data.tab2.table.tableList = tableData;
+    };
+    const queryTab3 = (cfId: string) => {
+      //加载表格配置tab3数据
+      data.tab3.table.tableLoading = true;
+      TSHttp.post("/systool/customform/button/queryTab3", {
+        ebEformId: cfId,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab3.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: item.ebId };
+              }
+            );
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab3.table.originalTableList = cloneDeep(
+              data.tab3.table.tableList
+            );
+          } else {
+            message.error(res.msg);
+          }
+          data.tab3.table.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab3.table.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+    const tab3ReceiveData = ({ tableData }) => {
+      data.tab3.table.tableList = tableData;
+    };
+    const queryTab4 = (cfId: string) => {
+      //加载表格配置tab4数据
+      data.tab4.table.tableLoading = true;
+      TSHttp.post("/systool/customform/condition/queryTab4", {
+        ecEformId: cfId,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab4.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: item.ecId };
+              }
+            );
+            data.tab4.table.selectedRowKeys = [];
+            data.tab4.table.selectedRows = [];
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab4.table.originalTableList = cloneDeep(
+              data.tab4.table.tableList
+            );
+          } else {
+            message.error(res.msg);
+          }
+          data.tab4.table.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab4.table.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+    const tab4ReceiveData = ({ tableData }) => {
+      data.tab4.table.tableList = tableData;
+    };
+
+    const queryTab5 = (cfId: string) => {
+      //加载表格配置tab5数据
+      data.tab5.table.tableLoading = true;
+      TSHttp.post("/systool/customform/condition/queryTab5", {
+        ecEformId: cfId,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab5.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: index + 1 };
+              }
+            );
+            data.tab5.table.selectedRowKeys = [];
+            data.tab5.table.selectedRows = [];
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab5.table.originalTableList = cloneDeep(
+              data.tab5.table.tableList
+            );
+          } else {
+            message.error(res.msg);
+          }
+          data.tab5.table.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab5.table.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+    const tab5ReceiveData = ({ tableData }) => {
+      data.tab5.table.tableList = tableData;
+    };
+
+    const queryTab6 = (cfId: string) => {
+      //加载表格配置tab2数据
+      data.tab6.table.tableLoading = true;
+      TSHttp.post("/systool/customform/condition/queryTab6", {
+        ecEformId: cfId,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab6.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: index + 1 };
+              }
+            );
+            data.tab6.table.selectedRowKeys = [];
+            data.tab6.table.selectedRows = [];
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab6.table.originalTableList = cloneDeep(
+              data.tab6.table.tableList
+            );
+          } else {
+            message.error(res.msg);
+          }
+          data.tab6.table.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab6.table.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+    const tab6ReceiveData = ({ tableData }) => {
+      data.tab6.table.tableList = tableData;
+    };
+
+    // 关闭新建弹窗
+    const handleCancel = () => {
+      data.custom.visible = false;
+      data.tabDisable = true;
+      data.tabActiveKey = "1";
+      //重置默认tab1的表单数据
+      data.tab1.form.cfId = "";
+      tab1FormRef.value.resetFields();
+      onSearch();
+    };
+
+    // 关闭tab4新建弹窗
+    const handleTab4FormCancel = () => {
+      //关闭弹窗的回调中重置表单数据
+      tab4FormRef.value.resetFields();
+      data.tab4.form.ecShowTypeSql = "";
+      data.tab4.form.ecDefltVal = "";
+      data.tab4.selectData.ecShowType = null;
+      data.tab4.formVisible = false;
+    };
+
+    // 关闭tab5新建弹窗
+    const handleTab5FormCancel = () => {
+      //关闭弹窗的回调中重置表单数据
+      tab5FormRef.value.resetFields();
+      data.tab5.form.ecShowTypeSql = "";
+      data.tab5.selectData.ecShowType = null;
+      data.tab5.formVisible = false;
+    };
+
+    // 关闭tab6新建弹窗
+    const handleTab6FormCancel = () => {
+      //关闭弹窗的回调中重置表单数据
+      tab6FormRef.value.resetFields();
+      data.tab6.form.ecShowTypeSql = "";
+      data.tab6.selectData.ecShowType = null;
+      data.tab6.formVisible = false;
+    };
+
+    //获取数据源下拉数据
+    const getDsSelect = () => {
+      data.tab1.spinning = true;
+      TSHttp.post("/admin/dbmeta/ds/list")
+        .then((res) => {
+          if (res.success) {
+            data.tab1.dsSelect = res.data;
+          } else {
+            message.error(res.msg);
+          }
+          data.tab1.spinning = false;
+        })
+        .catch((err) => {
+          data.tab1.spinning = false;
+          console.log("error:" + err);
+        });
+    };
+
+    const onDsChange = () => {
+      data.tab1.form.cfTabNam = "";
+    };
+
+    //弹窗物理表
+    const showDsTables = () => {
+      //未选择数据源时提示 请选择数据源
+      if (data.tab1.form.cfDataSrc) {
+        data.tab1.table.selectedRowKeys = [];
+        data.tab1.table.selectedRows = [];
+        data.tab1.table.tableList = [];
+        data.tab1.visibleTables = true;
+        getTableList();
+      } else {
+        message.error("请先选择数据源");
+      }
+    };
+
+    //弹窗绑定详情页面
+    const showPages = () => {
+      data.tab1.page.selectedRowKeys = [];
+      data.tab1.page.selectedRows = [];
+      data.tab1.page.tableList = [];
+      data.tab1.visiblePages = true;
+      getPageList();
+    };
+
+    //获取物理表分页数据
+    const getTableList = () => {
+      data.tab1.table.tableLoading = true;
+      data.tab1.table.selectedRowKeys = [];
+      data.tab1.table.selectedRows = [];
+      TSHttp.post(`/admin/dbmeta/tables/page`, {
+        dsId: data.tab1.form.cfDataSrc,
+        pageNum: data.tab1.table.pagination.current,
+        pageSize: data.tab1.table.pagination.pageSize,
+        tableName: data.tab1.table.searchForm.tableName,
+        tableComment: data.tab1.table.searchForm.tableComment,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab1.table.tableList = res.data.records;
+            data.tab1.table.pagination.total = res.data.total;
+          } else {
+            message.error(res.msg);
+          }
+          data.tab1.table.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab1.table.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+
+    //获取详情绑定页面分页数据
+    const getPageList = () => {
+      data.tab1.page.tableLoading = true;
+      data.tab1.page.selectedRowKeys = [];
+      data.tab1.page.selectedRows = [];
+      TSHttp.post("/systool/customform/eformInfo/page", {
+        pageNum: data.tab1.page.pagination.current,
+        pageSize: data.tab1.page.pagination.pageSize,
+        cfQueryCode: data.tab1.page.searchForm.cfQueryCode,
+        cfNeedNm: data.tab1.page.searchForm.cfNeedNm,
+      })
+        .then((res) => {
+          if (res.success) {
+            data.tab1.page.tableList = res.data.records;
+            data.tab1.page.pagination.total = res.data.total;
+          } else {
+            message.error(res.msg);
+          }
+          data.tab1.page.tableLoading = false;
+        })
+        .catch((err) => {
+          data.tab1.page.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+
+    //物理表搜索
+    const onTableSearch = () => {
+      getTableList();
+    };
+
+    //详情绑定页面搜索
+    const onPageSearch = () => {
+      getPageList();
+    };
+
+    //tab切换
+    const tabChange = (activeKey: string) => {
+      switch (activeKey) {
+        case "1":
+          queryTab1(data.tab1.form.cfId);
+          break;
+        case "2":
+          queryTab2(
+            data.tab1.form.cfId,
+            data.tab1.form.cfDataSrc,
+            data.tab1.form.cfTabNam
+          );
+          break;
+        case "3":
+          queryTab3(data.tab1.form.cfId);
+          queryTab2(
+            data.tab1.form.cfId,
+            data.tab1.form.cfDataSrc,
+            data.tab1.form.cfTabNam
+          );
+          break;
+        case "4":
+          queryTab2(
+            data.tab1.form.cfId,
+            data.tab1.form.cfDataSrc,
+            data.tab1.form.cfTabNam
+          );
+          queryTab4(data.tab1.form.cfId);
+          break;
+        case "5":
+          queryTab2(
+            data.tab1.form.cfId,
+            data.tab1.form.cfDataSrc,
+            data.tab1.form.cfTabNam
+          );
+          queryTab5(data.tab1.form.cfId);
+          break;
+        case "6":
+          queryTab2(
+            data.tab1.form.cfId,
+            data.tab1.form.cfDataSrc,
+            data.tab1.form.cfTabNam
+          );
+          queryTab6(data.tab1.form.cfId);
+          break;
+        default:
+          break;
+      }
+    };
+
+    //自定义表单分页
+    const getCustomList = (params: any) => {
+      data.custom.tableLoading = true;
+      data.custom.selectedRowKeys = [];
+      data.custom.selectedRows = [];
+      TSHttp.post("/systool/customform/eformInfo/page", params)
+        .then((res) => {
+          data.custom.tableLoading = false;
+          if (res.success && res.code === 200) {
+            data.custom.tableList = res.data.records;
+            data.custom.pagination.total = res.data.total;
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err) => {
+          data.custom.tableLoading = false;
+          console.log("error:" + err);
+        });
+    };
+
+    //自定义分页事件
+    const handleCustomChange = (pagination: {
+      current: number;
+      pageSize: number;
+    }) => {
+      data.custom.pagination.current = pagination.current;
+      data.custom.pagination.pageSize = pagination.pageSize;
+      getCustomList({
+        pageNum: data.custom.pagination.current,
+        pageSize: data.custom.pagination.pageSize,
+        ...data.custom.searchForm,
+      });
+    };
+
+    //自定义表单行事件
+    const handleRow = (record: any) => {
+      return {
+        // onDblclick: (event: any) => {
+        //   data.custom.selectedRowKeys = [];
+        //   data.custom.selectedRows = [];
+        //   data.custom.selectedRowKeys.push(record.cfId);
+        //   data.custom.selectedRows.push(record);
+        //   update(record);
+        // },
+      };
+    };
+
+    //物理表分页事件
+    const handleTableChange = (pagination: {
+      current: number;
+      pageSize: number;
+    }) => {
+      data.tab1.table.pagination.current = pagination.current;
+      data.tab1.table.pagination.pageSize = pagination.pageSize;
+      getTableList();
+    };
+
+    //物理表行事件
+    const handleTableRow = (record: any) => {
+      return {
+        onDblclick: (event: any) => {
+          data.tab1.form.cfTabNam = record.tableName;
+          data.tab1.visibleTables = false;
+          data.tab1.table.searchForm.tableName = "";
+          data.tab1.table.searchForm.tableComment = "";
+        },
+      };
+    };
+
+    //详情页面行事件
+    const handlePageRow = (record: any) => {
+      return {
+        onDblclick: (event: any) => {
+          data.tab1.form.cfDtlBindPage = record.cfNeedNm;
+          data.tab1.visiblePages = false;
+          data.tab1.page.searchForm.cfQueryCode = "";
+          data.tab1.page.searchForm.cfNeedNm = "";
+        },
+      };
+    };
+
+    //详情绑定页面分页事件
+    const handlePageChange = (pagination: {
+      current: number;
+      pageSize: number;
+    }) => {
+      data.tab1.page.pagination.current = pagination.current;
+      data.tab1.page.pagination.pageSize = pagination.pageSize;
+      getPageList();
+    };
+
+    //搜索
+    const onSearch = () => {
+      data.custom.selectedRowKeys = [];
+      data.custom.selectedRows = [];
+      getCustomList({
+        pageNum: data.custom.pagination.current,
+        pageSize: data.custom.pagination.pageSize,
+        ...data.custom.searchForm,
+      });
+    };
+
+    //重置并刷新自定义
+    const resetSearch = () => {
+      formRef.value.resetFields();
+      getCustomList({
+        pageNum: data.custom.pagination.current,
+        pageSize: data.custom.pagination.pageSize,
+        ...data.custom.searchForm,
+      });
+    };
+
+    //重置并刷新物理表
+    const resetTableSearch = () => {
+      tableFormRef.value.resetFields();
+      getTableList();
+    };
+
+    //重置并刷新详情绑定页面
+    const resetPageSearch = () => {
+      pageFormRef.value.resetFields();
+      getPageList();
+    };
+
+    //自定义表选择
+    const onSelectChange = (
+      selectedRowKeys: never[],
+      selectedRows: never[]
+    ) => {
+      data.custom.selectedRowKeys = selectedRowKeys;
+      data.custom.selectedRows = selectedRows;
+    };
+
+    //物理表选择
+    const onTableSelectChange = (
+      selectedRowKeys: never[],
+      selectedRows: never[]
+    ) => {
+      data.tab1.table.selectedRowKeys = selectedRowKeys;
+      data.tab1.table.selectedRows = selectedRows;
+    };
+
+    //tab4选择
+    const onTab4SelectChange = (
+      selectedRowKeys: never[],
+      selectedRows: never[]
+    ) => {
+      data.tab4.table.selectedRowKeys = selectedRowKeys;
+      data.tab4.table.selectedRows = selectedRows;
+    };
+
+    //tab5选择
+    const onTab5SelectChange = (
+      selectedRowKeys: never[],
+      selectedRows: never[]
+    ) => {
+      data.tab5.table.selectedRowKeys = selectedRowKeys;
+      data.tab5.table.selectedRows = selectedRows;
+    };
+
+    //tab6选择
+    const onTab6SelectChange = (
+      selectedRowKeys: never[],
+      selectedRows: never[]
+    ) => {
+      data.tab6.table.selectedRowKeys = selectedRowKeys;
+      data.tab6.table.selectedRows = selectedRows;
+    };
+
+    //物理表选择回调
+    const chooseTable = () => {
+      if (data.tab1.table.selectedRowKeys.length === 0) {
+        message.warning("请选择记录");
+      } else if (data.tab1.table.selectedRowKeys.length === 1) {
+        data.tab1.form.cfTabNam = data.tab1.table.selectedRows[0].tableName;
+        //重置搜索数据
+        tableFormRef.value.resetFields();
+        data.tab1.visibleTables = false;
+      } else {
+        message.warning("只能选择一条记录");
+      }
+    };
+
+    const handleChooseTableCancel = () => {
+      //重置搜索数据
+      tableFormRef.value.resetFields();
+    };
+
+    const handleChoosePageCancel = () => {
+      //重置搜索数据
+      pageFormRef.value.resetFields();
+    };
+
+    //详情绑定页面选择
+    const onPageSelectChange = (
+      selectedRowKeys: never[],
+      selectedRows: never[]
+    ) => {
+      data.tab1.page.selectedRowKeys = selectedRowKeys;
+      data.tab1.page.selectedRows = selectedRows;
+    };
+
+    //详情绑定页面选择回调
+    const choosePage = () => {
+      if (data.tab1.page.selectedRowKeys.length === 0) {
+        message.warning("请选择记录");
+      } else if (data.tab1.page.selectedRowKeys.length === 1) {
+        data.tab1.form.cfDtlBindPage = data.tab1.page.selectedRows[0].cfNeedNm;
+        //重置搜索数据
+        pageFormRef.value.resetFields();
+        data.tab1.visiblePages = false;
+      } else {
+        message.warning("只能选择一条记录");
+      }
+    };
+
+    //tab1保存
+    const tab1FormSubmit = () => {
+      tab1FormRef.value.validate().then(() => {
+        data.tab1.spinning = true;
+        if(data.custom.selectedRows.length === 1 && null != data.custom.selectedRows[0].cfQueryCode){
+          data.tab1.form.cfQueryCode = data.custom.selectedRows[0].cfQueryCode;
+        }
+        TSHttp.post(
+          "/systool/customform/eformInfo/saveTab1",
+          data.tab1.form,
+          ContentType.APPLICATION_JSON
+        )
+          .then((res: any) => {
+            data.tab1.spinning = false;
+            if (res.success && res.data) {
+              message.success(res.msg);
+              //回显
+              data.tab1.form.cfId = res.data.cfId;
+              data.tab1.form.cfNeedNm = res.data.cfNeedNm;
+              data.tab1.form.cfDataSrc = res.data.cfDataSrc;
+              data.tab1.form.cfTabNam = res.data.cfTabNam;
+              data.tab1.form.cfDtlBindPage = res.data.cfDtlBindPage;
+              data.tab1.form.cfDtlBindName = res.data.cfDtlBindName;
+              data.tab1.form.cfDsc = res.data.cfDsc;
+
+              data.tabDisable = false; //保存tab1后开放后面tab
+              data.tabActiveKey = "2"; //切换到tab2
+              queryTab2(
+                data.tab1.form.cfId,
+                data.tab1.form.cfDataSrc,
+                data.tab1.form.cfTabNam
+              );
+            } else {
+              message.error(res.msg);
+            }
+          })
+          .catch((err: unknown) => {
+            data.tab1.spinning = false;
+            console.log(err, "err....");
+          });
+      });
+    };
+
+    //tab2保存
+    const tab2TableSubmit = () => {
+      let list = data.tab2.table.tableList;
+      let checkBoolean = false;
+      let tipMsg = "";
+      list.some((l: any) => {
+        //字段显示名称必填
+        if ("3" == l.fdDatatype || "4" == l.fdDatatype || "5" == l.fdDatatype) {
+          if (
+            l.fdFieldShowdesc == null ||
+            l.fdFieldShowdesc == "" ||
+            l.fdFieldShowdesc == undefined
+          ) {
+            checkBoolean = true;
+            tipMsg = "字段显示名称必填";
+            return true;
+          }
+          //判断list中显示类型存在3，4，5的情况下必须填写sql
+          if (
+            l.fdSysValue == null ||
+            l.fdSysValue == "" ||
+            l.fdSysValue == undefined
+          ) {
+            checkBoolean = true;
+            tipMsg = "下拉框或树形结构必须要求填写SQL";
+            return true;
+          }
+        }
+      });
+      if (checkBoolean) {
+        message.warning(tipMsg);
+        return;
+      }
+
+      data.tab2.spinning = true;
+      TSHttp.post(
+        "/systool/customform/tablefield/saveTab2",
+        list,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          data.tab2.spinning = false;
+          if (res.success) {
+            message.success(res.msg);
+            queryTab3(data.tab1.form.cfId);
+            data.tabActiveKey = "3"; //切换到tab3
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          data.tab2.spinning = false;
+          console.log(err, "err....");
+        });
+    };
+
+    //tab3保存
+    const tab3TableSubmit = () => {
+      let list = data.tab3.table.tableList;
+      data.tab3.spinning = true;
+      TSHttp.post(
+        "/systool/customform/button/saveTab3",
+        list,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          data.tab3.spinning = false;
+          if (res.success) {
+            message.success(res.msg);
+            queryTab2(
+              data.tab1.form.cfId,
+              data.tab1.form.cfDataSrc,
+              data.tab1.form.cfTabNam
+            );
+            queryTab4(data.tab1.form.cfId);
+            data.tabActiveKey = "4"; //切换到tab4
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          data.tab3.spinning = false;
+          console.log(err, "err....");
+        });
+    };
+
+    //tab4保存
+    const tab4TableSubmit = () => {
+      let list = data.tab4.table.tableList;
+      let checkBoolean = false;
+      let tipMsg = "";
+      list.some((l: any) => {
+        //判断list中显示类型存在3，4，5的情况下必须填写sql
+        if ("3" == l.ecShowType || "4" == l.ecShowType || "5" == l.ecShowType) {
+          if (
+            l.ecShowTypeSql == null ||
+            l.ecShowTypeSql == "" ||
+            l.ecShowTypeSql == undefined
+          ) {
+            checkBoolean = true;
+            tipMsg = "下拉框或树形结构必须要求填写SQL";
+            return true;
+          }
+        }
+        //判断list中有默认值的必须填写sql
+        if ("Y" == l.ecDefltValFlg) {
+          if (
+            l.ecDefltVal == null ||
+            l.ecDefltVal == "" ||
+            l.ecDefltVal == undefined
+          ) {
+            checkBoolean = true;
+            tipMsg = "有默认值必须要求填写SQL";
+            return true;
+          }
+        }
+      });
+      if (checkBoolean) {
+        message.warning(tipMsg);
+        return;
+      }
+      data.tab4.spinning = true;
+      TSHttp.post(
+        "/systool/customform/condition/saveTab4/" + data.tab1.form.cfId,
+        list,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          data.tab4.spinning = false;
+          if (res.success) {
+            message.success(res.msg);
+            data.tabActiveKey = "5"; //切换到tab5
+            queryTab5(data.tab1.form.cfId);
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          data.tab4.spinning = false;
+          console.log(err, "err....");
+        });
+    };
+
+    //tab4重置
+    const tab4TableReset = () => {
+      data.tab4.spinning = true;
+      TSHttp.post(
+        "/systool/customform/condition/resetForm/" +
+          data.tab1.form.cfId +
+          "/" +
+          data.tabActiveKey,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          if (res.success) {
+            data.tab4.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: item.ecId };
+              }
+            );
+            data.tab4.table.selectedRowKeys = [];
+            data.tab4.table.selectedRows = [];
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab4.table.originalTableList = cloneDeep(
+              data.tab4.table.tableList
+            );
+            message.success(res.msg);
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          console.log(err, "err....");
+        })
+        .finally(() => {
+          data.tab4.spinning = false;
+        });
+    };
+
+    //tab5保存
+    const tab5TableSubmit = () => {
+      let list = data.tab5.table.tableList;
+      //判断list中显示类型存在3，4，5的情况下必须填写sql
+      let checkBoolean = false;
+      list.some((l: any) => {
+        if ("3" == l.ecShowType || "4" == l.ecShowType || "5" == l.ecShowType) {
+          if (
+            l.ecShowTypeSql == null ||
+            l.ecShowTypeSql == "" ||
+            l.ecShowTypeSql == undefined
+          ) {
+            checkBoolean = true;
+            return true;
+          }
+        } else if ("6" == l.ecShowType) {
+          l.ecIsRequired = "Y";
+          l.ecDefltValFlg = "Y";
+          l.ecConditionIsshow = "0";
+        }
+      });
+      if (checkBoolean) {
+        message.warning("下拉框或树形结构必须要求填写SQL");
+        return;
+      }
+      data.tab5.spinning = true;
+      TSHttp.post(
+        "/systool/customform/condition/saveTab5/" + data.tab1.form.cfId,
+        list,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          data.tab5.spinning = false;
+          if (res.success) {
+            message.success(res.msg);
+            data.tabActiveKey = "6"; //切换到tab5
+            queryTab6(data.tab1.form.cfId);
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          data.tab5.spinning = false;
+          console.log(err, "err....");
+        });
+    };
+
+    //tab5重置
+    const tab5TableReset = () => {
+      data.tab5.spinning = true;
+      TSHttp.post(
+        "/systool/customform/condition/resetForm/" +
+          data.tab1.form.cfId +
+          "/" +
+          data.tabActiveKey,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          if (res.success) {
+            data.tab5.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: index + 1 };
+              }
+            );
+            data.tab5.table.selectedRowKeys = [];
+            data.tab5.table.selectedRows = [];
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab5.table.originalTableList = cloneDeep(
+              data.tab5.table.tableList
+            );
+            message.success(res.msg);
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          console.log(err, "err....");
+        })
+        .finally(() => {
+          data.tab5.spinning = false;
+        });
+    };
+
+    //tab6保存
+    const tab6TableSubmit = () => {
+      let list = data.tab6.table.tableList;
+      //判断list中显示类型存在3，4，5的情况下必须填写sql
+      let checkBoolean = false;
+      list.some((l: any) => {
+        if ("3" == l.ecShowType || "4" == l.ecShowType || "5" == l.ecShowType) {
+          if (
+            l.ecShowTypeSql == null ||
+            l.ecShowTypeSql == "" ||
+            l.ecShowTypeSql == undefined
+          ) {
+            checkBoolean = true;
+            return true;
+          }
+        }
+      });
+      if (checkBoolean) {
+        message.warning("下拉框或树形结构必须要求填写SQL");
+        return;
+      }
+      data.tab6.spinning = true;
+      TSHttp.post(
+        "/systool/customform/condition/saveTab6/" + data.tab1.form.cfId,
+        list,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          data.tab6.spinning = false;
+          if (res.success) {
+            message.success(res.msg);
+            data.custom.visible = false; //关闭编辑抽屉
+            getCustomList({
+              pageNum: data.custom.pagination.current,
+              pageSize: data.custom.pagination.pageSize,
+              ...data.custom.searchForm,
+            }); //加载自定义表单信息
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          data.tab6.spinning = false;
+          console.log(err, "err....");
+        });
+    };
+
+    //tab6重置
+    const tab6TableReset = () => {
+      data.tab6.spinning = true;
+      TSHttp.post(
+        "/systool/customform/condition/resetForm/" +
+          data.tab1.form.cfId +
+          "/" +
+          data.tabActiveKey,
+        ContentType.APPLICATION_JSON
+      )
+        .then((res) => {
+          if (res.success) {
+            data.tab6.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: index + 1 };
+              }
+            );
+            data.tab6.table.selectedRowKeys = [];
+            data.tab6.table.selectedRows = [];
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab6.table.originalTableList = cloneDeep(
+              data.tab6.table.tableList
+            );
+            message.success(res.msg);
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err: unknown) => {
+          console.log(err, "err....");
+        })
+        .finally(() => {
+          data.tab6.spinning = false;
+        });
+    };
+
+    //重置表单
+    const tab1FormReset = () => {
+      if (data.custom.btnType == "update") {
+        data.tab1.form.cfDataSrc = "";
+        data.tab1.form.cfTabNam = "";
+        data.tab1.form.cfDtlBindPage = "";
+        data.tab1.form.cfDtlBindName = "";
+        data.tab1.form.cfDsc = "";
+      } else {
+        tab1FormRef.value.resetFields();
+      }
+    };
+
+    //删除
+    const onDelete = () => {
+      if (data.custom.selectedRows.length === 0) {
+        message.warning("请选择记录");
+        return;
+      } else {
+        let checkBoolean = false;
+        data.custom.selectedRows.some((customInfoTemp: any) => {
+          if (customInfoTemp.cfStat == "Y") {
+            checkBoolean = true;
+            return true;
+          }
+        });
+        if (checkBoolean) {
+          message.warning("选择记录中包含已发布记录(发布记录无法删除)");
+          return;
+        }
+      }
+      Modal.confirm({
+        title: () => "确实要删除选择的记录吗?",
+        onOk() {
+          // 请求删除接口
+          return new Promise<void>((resolve, reject) => {
+            TSHttp.post(`/systool/customform/eformInfo/delete`, {
+              ids: data.custom.selectedRowKeys.join(","),
+            })
+              .then((res) => {
+                console.log(res, "res...");
+                if (res.success && res.code === 200) {
+                  message.success(res.msg);
+                  onSearch();
+                  resolve();
+                } else {
+                  reject();
+                }
+              })
+              .catch((err) => {
+                console.log(err, "err....");
+              });
+          });
+        },
+      });
+    };
+
+    //发布
+    const publish = () => {
+      if (data.custom.selectedRows.length === 0) {
+        message.warning("请选择记录");
+        return;
+      } else {
+        let checkBoolean = false;
+        data.custom.selectedRows.some((customInfoTemp: any) => {
+          if (customInfoTemp.cfStat == "Y") {
+            checkBoolean = true;
+            return true;
+          }
+        });
+        if (checkBoolean) {
+          message.warning("选择记录中包含已发布记录");
+          return;
+        }
+      }
+      Modal.confirm({
+        title: () => "确实要发布选择的记录吗?",
+        onOk() {
+          // 请求发布接口
+          return new Promise<void>((resolve, reject) => {
+            TSHttp.post(`/systool/customform/eformInfo/publish`, {
+              ids: data.custom.selectedRowKeys.join(","),
+            })
+              .then((res) => {
+                if (res.success && res.code === 200) {
+                  message.success(res.msg);
+                  onSearch();
+                  resolve();
+                } else {
+                  reject();
+                }
+              })
+              .catch((err) => {
+                console.log(err, "err....");
+              });
+          });
+        },
+        onCancel() {
+          console.log("Cancel");
+        },
+      });
+    };
+
+    const bindingMenu = () => {
+      menuDrawer.flag = false;
+      //data.selectedRows
+      if (data.custom.selectedRows.length) {
+        if (data.custom.selectedRows.length === 1) {
+          if (data.custom.selectedRows[0].cfStat === "Y") {
+            menuDrawer.visible = true;
+            getMenuTree();
+            getMenusDetail({
+              id: data.custom.selectedRows[0].cfQueryCode,
+              logicSysNo: sessionStorage.getItem("logicSysNo"),
+            }).then((res) => {
+              if (res.success) {
+                if (res.data) {
+                  menuDrawer.flag = true;
+                  drawerForm.id = data.custom.selectedRows[0].cfQueryCode;
+                  drawerForm.funcId = data.custom.selectedRows[0].cfId;
+                  drawerForm.menuName = res.data.menuName;
+                  drawerForm.logicSysNo = sessionStorage.getItem("logicSysNo");
+                  drawerForm.parentId = res.data.parentId;
+                  drawerForm.orderNo = res.data.orderNo;
+                  drawerForm.navIcon = res.data.navIcon;
+                } else {
+                  menuDrawer.flag = false;
+                  drawerForm.id = data.custom.selectedRows[0].cfQueryCode;
+                  drawerForm.funcId = data.custom.selectedRows[0].cfId;
+                  drawerForm.menuName = data.custom.selectedRows[0].cfNeedNm;
+                  drawerForm.logicSysNo = sessionStorage.getItem("logicSysNo");
+                  drawerForm.parentId = null;
+                  drawerForm.orderNo = 0;
+                  drawerForm.navIcon = "";
+                }
+              }
+            });
+          } else {
+            message.warning("请选择已发布的");
+          }
+        } else {
+          message.warning("只能选择一个");
+        }
+      } else {
+        message.warning("请选择记录");
+      }
+    };
+    const exportToFile = () => {
+      if (data.custom.selectedRows.length === 0) {
+        message.warning('请选择记录')
+        return
+      }
+      var ids = data.custom.selectedRowKeys.join(",");
+      TSHttp.post(
+        `/systool/customform/eformInfo/export?ids=${ids}`, [],
+        ContentType.APPLICATION_JSON,
+        true
+      ).then(res => {
+        if (res) {
+          let url = window.URL.createObjectURL(res);
+          let link = document.createElement("a");
+          link.style.display = "none";
+          link.href = url;
+          link.setAttribute("download", "自定义表单导出.xlsx");
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url)
+        }
+      }).catch(err => {
+        console.log("err...");
+      })
+    };
+    const handleBeforeImport = () => {
+      console.info("导入之前...");
+    }
+    const handleImportChange = (info: FileInfo) => {
+      if (info.file.status === 'done') {
+        if (info.file.response.success) {
+          data.custom.pagination.current = 1;
+          message.success(`${info.file.name} 导入成功`);
+          onSearch();
+          handleImportCancel();
+        } else {
+          message.error(info.file.response.msg);
+        }
+        foreignUpload.value = '';
+        fileList.value = [];
+      } else if (info.file.status === 'error') {
+        message.error(`${info.file.name} 导入失败.`);
+      }
+    }
+    const handleImportCancel = () => {
+      data.uploadVisible = false
+    }
+    const importFromFile = () => {
+      console.info("导入 ...");
+      data.uploadVisible = true;
+    };
+    const drawerFormRef = ref();
+    const drawerRules = {
+      parentId: [
+        { required: true, message: "请选择上级菜单", trigger: "blur" },
+      ],
+      menuName: [
+        { required: true, message: "请输入菜单名称", trigger: "blur" },
+      ],
+    };
+    const drawerForm = reactive({
+      id: "",
+      parentId: "",
+      menuName: "",
+      funcId: "",
+      navIcon: "",
+      logicSysNo: "",
+      orderNo: 0,
+    });
+
+    const getMenuTree = async () => {
+      try {
+        const resp = await getMenusList({
+          logicSysNo: sessionStorage.getItem("logicSysNo"),
+        });
+        if (resp.success) {
+          const stack = [];
+          resp.data.forEach((item) => {
+            stack.unshift(item);
+          });
+          let stackTop;
+          while (stack.length) {
+            stackTop = stack.pop();
+            if (stackTop) {
+              stackTop.slots = { icon: "icon" };
+              if (stackTop.children && stackTop.children.length) {
+                stackTop.children.forEach((item) => {
+                  stack.push(item);
+                });
+              }
+            }
+          }
+          const rootNode = {
+            key: "0",
+            id: "0",
+            parentId: "",
+            menuName: "全部菜单",
+            funcId: "",
+            navIcon: "HomeOutlined",
+            logicSysNo: "",
+            orderNo: 0,
+            slots: { icon: "icon" },
+            children: resp.data,
+          };
+          menuDrawer.treeData = [rootNode];
+          console.log(menuDrawer.treeData);
+        } else {
+          //TODO
+        }
+      } catch (e) {
+        //TODO
+      }
+    };
+
+    const menuDrawer = reactive({
+      visible: false,
+      treeData: [],
+      flag: false,
+    });
+
+    const onDrawerCancel = () => {
+      menuDrawer.visible = false;
+    };
+
+    const onSubmit = () => {
+      console.log(drawerForm.navIcon);
+      drawerFormRef.value.validate().then(() => {
+        if (menuDrawer.flag) {
+          getMenusUpdate({
+            ...drawerForm,
+          }).then((res) => {
+            if (res.success) {
+              menuDrawer.visible = false;
+              message.success(res.msg);
+            } else {
+              message.error(res.msg);
+            }
+          });
+        } else {
+          getMenusAdd({
+            ...drawerForm,
+          }).then((res) => {
+            if (res.success) {
+              menuDrawer.visible = false;
+              message.success(res.msg);
+            } else {
+              message.error(res.msg);
+            }
+          });
+        }
+      });
+    };
+
+    //取消发布
+    const unPublish = () => {
+      if (data.custom.selectedRows.length === 0) {
+        message.warning("请选择记录");
+        return;
+      } else {
+        let checkBoolean = false;
+        data.custom.selectedRows.some((customInfoTemp: any) => {
+          if (customInfoTemp.cfStat == "N") {
+            checkBoolean = true;
+            return true;
+          }
+        });
+        if (checkBoolean) {
+          message.warning("选择记录中包含未发布记录");
+          return;
+        }
+      }
+      Modal.confirm({
+        title: () => "确实要取消发布选择的记录吗?",
+        onOk() {
+          // 请求发布接口
+          return new Promise<void>((resolve, reject) => {
+            TSHttp.post(`/systool/customform/eformInfo/unPublish`, {
+              ids: data.custom.selectedRowKeys.join(","),
+            })
+              .then((res) => {
+                if (res.success && res.code === 200) {
+                  message.success(res.msg);
+                  onSearch();
+                  resolve();
+                } else {
+                  reject();
+                }
+              })
+              .catch((err) => {
+                console.log(err, "err....");
+              });
+          });
+        },
+      });
+    };
+
+    //对外接口
+    const outInterface = () => {
+      if (data.custom.selectedRows.length === 0) {
+        message.warning("请选择记录");
+        return;
+      }
+      if (data.custom.selectedRows.length > 1) {
+        message.warning("只能选择一条记录");
+        return;
+      }
+      let checkBoolean = false;
+      data.custom.selectedRows.some((customInfoTemp: any) => {
+        if (customInfoTemp.cfStat == "N") {
+          checkBoolean = true;
+          return true;
+        }
+      });
+      if (checkBoolean) {
+        message.warning("该数据未发布");
+        return;
+      }
+      Modal.confirm({
+        title: () => "对外接口",
+        okText: "复制",
+        content: () =>
+          "/index/sys/customFormPreview/" + data.custom.selectedRowKeys[0],
+        onOk() {
+          //操作如下
+
+          //解构出复制方法
+          const { toClipboard } = clipboard3();
+          const copy = async () => {
+            try {
+              await toClipboard(
+                `/index/sys/customFormPreview/${data.custom.selectedRowKeys[0]}`
+              );
+              message.success("复制成功");
+            } catch (error) {
+              message.error("复制失败");
+            }
+          };
+          copy();
+        },
+      });
+    };
+
+    //同步tab2数据
+    const syncTab2 = () => {
+      data.tab2.spinning = true;
+      TSHttp.post("/systool/customform/tablefield/syncTableField", {
+        fdEformId: data.tab1.form.cfId,
+        cfDataSrc: data.tab1.form.cfDataSrc,
+        cfTabNam: data.tab1.form.cfTabNam,
+      })
+        .then((res) => {
+          data.tab2.spinning = false;
+          if (res.success) {
+            queryTab2(
+              data.tab1.form.cfId,
+              data.tab1.form.cfDataSrc,
+              data.tab1.form.cfTabNam
+            );
+            message.success(res.msg);
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err) => {
+          data.tab2.spinning = false;
+          console.log("error:" + err);
+        });
+    };
+
+    //重置tab3数据
+    const resetTab3 = () => {
+      data.tab3.spinning = true;
+      TSHttp.post("/systool/customform/button/queryButton", {
+        ebEformId: data.tab1.form.cfId,
+      })
+        .then((res) => {
+          data.tab3.spinning = false;
+          if (res.success) {
+            data.tab3.table.tableList = res.data.map(
+              (item: any, index: number) => {
+                return { ...item, key: index + 1 };
+              }
+            );
+            //原始数据赋值 页面编辑取消时还原数据
+            data.tab3.table.originalTableList = cloneDeep(
+              data.tab3.table.tableList
+            );
+          } else {
+            message.error(res.msg);
+          }
+        })
+        .catch((err) => {
+          data.tab3.spinning = false;
+          console.log("error:" + err);
+        });
+    };
+
+    //重置tab4数据
+    const resetTab4 = () => {
+      tab4TableReset();
+    };
+
+    //移出table
+    const removeTab4 = () => {
+      data.tab4.table.tableList = data.tab4.table.tableList.filter(
+        (item) => data.tab4.table.selectedRowKeys.indexOf(item.ecId) == -1
+      );
+      //重置排序
+      data.tab4.table.tableList.map(
+        (item, index) => (item.ecIsShowOrder = index)
+      );
+      message.warn("所有条件信息配置完成后，请点击保存！");
+    };
+
+    //重置tab5
+    const resetTab5 = () => {
+      tab5TableReset();
+    };
+
+    //移出tab5
+    const removeTab5 = () => {
+      data.tab5.table.tableList = data.tab5.table.tableList.filter(
+        (item) => data.tab5.table.selectedRowKeys.indexOf(item.ecId) == -1
+      );
+      //重置排序
+      data.tab5.table.tableList.map(
+        (item, index) => (item.ecIsShowOrder = index)
+      );
+      message.warn("所有条件信息配置完成后，请点击保存！");
+    };
+
+    //重置tab6
+    const resetTab6 = () => {
+      tab6TableReset();
+    };
+
+    //移出tab6
+    const removeTab6 = () => {
+      data.tab6.table.tableList = data.tab6.table.tableList.filter(
+        (item) => data.tab6.table.selectedRowKeys.indexOf(item.ecId) == -1
+      );
+      //重置排序
+      data.tab6.table.tableList.map(
+        (item, index) => (item.ecIsShowOrder = index)
+      );
+      message.warn("所有条件信息配置完成后，请点击保存！");
+    };
+
+    //显示字段名称修改后，同步注释到form中
+    const onField4SelectChange = (value: any, option: any) => {
+      data.tab4.form.ecFieldName = option.key;
+      //根据key值查找data.tab2.table.tableList对应的数据库列类型
+      data.tab2.table.tableList.map((item: any) => {
+        if (value == item.fdFieldName) {
+          data.tab4.form.ecDataType = item.fdFieldType;
+        }
+      });
+      //重置显示类型为空 重新选择类型方便弹出SQL窗口
+      data.tab4.form.ecShowType = null;
+      //重置默认值标识为空 重新选择类型方便弹出SQL窗口
+      data.tab4.form.ecDefltValFlg = null;
+    };
+
+    const onField5SelectChange = (value: any, option: any) => {
+      data.tab5.form.ecFieldName = option.key;
+      //根据key值查找data.tab2.table.tableList对应的数据库列类型
+      data.tab2.table.tableList.map((item: any) => {
+        if (value == item.fdFieldName) {
+          data.tab5.form.ecDataType = item.fdFieldType;
+        }
+      });
+      //重置显示类型为空 重新选择类型方便弹出SQL窗口
+      data.tab5.form.ecShowType = null;
+    };
+
+    const onField6SelectChange = (value: any, option: any) => {
+      data.tab6.form.ecFieldName = option.key;
+      //根据key值查找data.tab2.table.tableList对应的数据库列类型
+      data.tab2.table.tableList.map((item: any) => {
+        if (value == item.fdFieldName) {
+          data.tab6.form.ecDataType = item.fdFieldType;
+        }
+      });
+      //重置显示类型为空 重新选择类型方便弹出SQL窗口
+      data.tab6.form.ecShowType = null;
+    };
+
+    const tab4AddFormSubmit = () => {
+      //验证
+      tab4FormRef.value.validate().then(() => {
+        //保存到table中
+        //生成uuid
+        data.tab4.form.ecId = guid();
+        const newData = cloneDeep(data.tab4.form);
+        newData.key = data.tab4.form.ecId; //赋值key
+        let hasCol = false; //是否存在该列
+        //搜索框不限制重复列
+        // data.tab4.table.tableList.some((item: any, index: number) => {
+        //   //如果存在字段信息,则删除 排序的号码要保留
+        //   if (item.ecShowFieldName == newData.ecShowFieldName) {
+        //     hasCol = true;
+        //     newData.ecIsShowOrder = item.ecIsShowOrder;
+        //     data.tab4.table.tableList.splice(index, 1, newData);
+        //     return true;
+        //   }
+        // });
+        if (!hasCol) {
+          data.tab4.table.tableList.push(newData);
+        }
+        //同步数据
+        data.tab4.table.originalTableList = cloneDeep(
+          data.tab4.table.tableList
+        );
+        //清空表单
+        tab4FormRef.value.resetFields();
+        data.tab4.form.ecShowTypeSql = "";
+        data.tab4.selectData.ecShowType = null;
+        data.tab4.form.ecDefltVal = "";
+        //关闭窗口
+        data.tab4.formVisible = false;
+        message.warn("所有条件信息配置完成后，请点击保存！");
+      });
+    };
+
+    const tab5AddFormSubmit = () => {
+      tab5FormRef.value.validate().then(() => {
+        data.tab5.form.ecId = guid();
+        const newData = cloneDeep(data.tab5.form);
+        newData.key = data.tab5.form.ecId; //赋值key
+        //新增框不能重复添加相同字段
+        let hasCol = false; //是否存在该列
+        data.tab5.table.tableList.some((item: any, index: number) => {
+          //如果存在字段信息,则删除 排序的号码要保留
+          if (item.ecShowFieldName == newData.ecShowFieldName) {
+            hasCol = true;
+            newData.ecIsShowOrder = item.ecIsShowOrder;
+            data.tab5.table.tableList.splice(index, 1, newData);
+            return true;
+          }
+        });
+        if (!hasCol) {
+          data.tab5.table.tableList.push(newData);
+        }
+        //同步数据
+        data.tab5.table.originalTableList = cloneDeep(
+          data.tab5.table.tableList
+        );
+        //清空表单
+        tab5FormRef.value.resetFields();
+        data.tab5.form.ecShowTypeSql = "";
+        data.tab5.selectData.ecShowType = null;
+        //关闭窗口
+        data.tab5.formVisible = false;
+        message.warn("所有条件信息配置完成后，请点击保存！");
+      });
+    };
+
+    const tab6AddFormSubmit = () => {
+      tab6FormRef.value.validate().then(() => {
+        data.tab6.form.ecId = guid();
+        const newData = cloneDeep(data.tab6.form);
+        newData.key = data.tab6.form.ecId; //赋值key
+        //新增框不能重复添加相同字段
+        let hasCol = false; //是否存在该列
+        data.tab6.table.tableList.some((item: any, index: number) => {
+          //如果存在字段信息,则删除 排序的号码要保留
+          if (item.ecShowFieldName == newData.ecShowFieldName) {
+            hasCol = true;
+            newData.ecIsShowOrder = item.ecIsShowOrder;
+            data.tab6.table.tableList.splice(index, 1, newData);
+            return true;
+          }
+        });
+        if (!hasCol) {
+          data.tab6.table.tableList.push(newData);
+        }
+        //同步数据
+        data.tab6.table.originalTableList = cloneDeep(
+          data.tab6.table.tableList
+        );
+        //清空表单
+        tab6FormRef.value.resetFields();
+        data.tab6.form.ecShowTypeSql = "";
+        data.tab6.selectData.ecShowType = null;
+        //关闭窗口
+        data.tab6.formVisible = false;
+        message.warn("所有条件信息配置完成后，请点击保存！");
+      });
+    };
+
+    //生成随机ID
+    const guid = () => {
+      let s = [];
+      let hexDigits = "0123456789abcdef";
+      for (let i = 0; i < 32; i++) {
+        s[i] = hexDigits.substr(Math.floor(Math.random() * 0x10), 1);
+      }
+      s[14] = "4"; // bits 12-15 of the time_hi_and_version field to 0010
+      s[19] = hexDigits.substr((s[19] & 0x3) | 0x8, 1); // bits 6-7 of the clock_seq_hi_and_reserved to 01
+      let uuid = s.join("");
+      return uuid;
+    };
+
+    //tab3配置按钮取消
+    const handleTab3SelectCancel = () => {
+      //遍历原始数据
+      data.tab3.table.originalTableList.some((item, index) => {
+        if (item.ebId === data.tab3.select.form.ebId) {
+          data.tab3.table.tableList[index].ebIsEdit = item.ebIsEdit;
+          return true;
+        }
+      });
+      //重置表单数据
+      tab3SelectFormRef.value.resetFields();
+      if (data.tab3.isShowForm) {
+        data.tab3.formVisible = true;
+        //是否存在默认值变成空
+        data.tab3.form.ecDefltValFlg = null;
+      }
+    };
+
+    //tab3配置按钮保存
+    const tab3AddSelectSubmit = () => {
+      //验证
+      //将SQL语句保存到table数据中
+      if(null == data.tab3.select.form.ebButtonName || '' === data.tab3.select.form.ebButtonName.trim()){
+        message.error("请填写【按钮名称】！");
+        return false;
+      }
+      if(data.tab3.select.form.ebButtonId === 'buttonBat1' && (null == data.tab3.select.form.ebEditContent || '' === data.tab3.select.form.ebEditContent.trim())){
+        message.error("请填写【配置信息】！");
+        return false;
+      }
+      if(data.tab3.select.form.ebButtonId === 'buttonBat1'){
+        if(null != data.tab3.select.form.ebEditContent && "" !== data.tab3.select.form.ebEditContent){
+            //将SQL语句保存到table数据中
+            data.tab3.table.tableList.some((item: any, index: number) => {
+              if (data.tab3.select.form.ebId == item.ebId) {
+                item.ebEditContent = data.tab3.select.form.ebEditContent;
+                item.ebButtonName = data.tab3.select.form.ebButtonName;
+                return true;
+              }
+            });
+            //同步数据
+            data.tab3.table.originalTableList = cloneDeep(
+              data.tab3.table.tableList
+            );
+            data.tab3.selectVisible = false;
+            message.success("保存成功");
+            data.tab3.select.form.ebId = "";
+        }else{
+          message.warn("【配置信息】不能为空");
+        }
+      }else if(data.tab3.select.form.ebButtonId === 'buttonAdd' || data.tab3.select.form.ebButtonId === 'buttonEdit'){
+        if((null != data.tab3.select.form.ebDatasource && "" !== data.tab3.select.form.ebDatasource
+           && (null == data.tab3.select.form.ebProcName || "" === data.tab3.select.form.ebProcName))
+           || (null != data.tab3.select.form.ebProcName && "" !== data.tab3.select.form.ebProcName
+           && (null == data.tab3.select.form.ebDatasource || "" === data.tab3.select.form.ebDatasource))){
+          message.warn("【存储过程数据源】和【存储过程】必须同时为空或同时不为空");
+        }else{
+          if(null != data.tab3.select.form.ebDatasource && "" !== data.tab3.select.form.ebDatasource
+           && null != data.tab3.select.form.ebProcName && "" !== data.tab3.select.form.ebProcName){
+            data.tab3.select.form.ebEditContent = JSON.stringify({
+              datasource: data.tab3.select.form.ebDatasource,
+              procedure: data.tab3.select.form.ebProcName
+            });
+          }else{
+            data.tab3.select.form.ebEditContent = null;
+          }
+          data.tab3.table.tableList.some((item: any, index: number) => {
+            if (data.tab3.select.form.ebId == item.ebId) {
+              item.ebEditContent = data.tab3.select.form.ebEditContent;
+              item.ebButtonName = data.tab3.select.form.ebButtonName;
+              return true;
+            }
+          });
+          //同步数据
+          data.tab3.table.originalTableList = cloneDeep(
+            data.tab3.table.tableList
+          );
+          data.tab3.selectVisible = false;
+          message.success("保存成功");
+          data.tab3.select.form.ebId = "";
+        }
+      }else{
+        //将SQL语句保存到table数据中
+        data.tab3.table.tableList.some((item: any, index: number) => {
+          if (data.tab3.select.form.ebId == item.ebId) {
+            item.ebEditContent = data.tab3.select.form.ebEditContent;
+            item.ebButtonName = data.tab3.select.form.ebButtonName;
+            return true;
+          }
+        });
+        //同步数据
+        data.tab3.table.originalTableList = cloneDeep(
+          data.tab3.table.tableList
+        );
+        data.tab3.selectVisible = false;
+        message.success("保存成功");
+        data.tab3.select.form.ebId = "";
+      }
+    };
+
+    //tab4新增条件选择默认值
+    const selectTab4Change = (value: any, option: any) => {
+      if (value === "Y") {
+        //加载之前保存的数据
+        data.tab4.select.form.ecDefltVal = data.tab4.form.ecDefltVal;
+        if (data.tab4.form.ecShowFieldName) {
+          data.tab4.formVisible = false;
+          data.tab4.selectVisible = true;
+        } else {
+          message.warn("请先选择显示字段名称");
+        }
+      }
+    };
+
+    //tab5新增条件选择默认值
+    const selectTab5Change = (value: any, option: any) => {
+      if (value === "Y") {
+        //加载之前保存的数据
+        data.tab5.select.form.ecDefltVal = data.tab5.form.ecDefltVal;
+        if (data.tab5.form.ecShowFieldName) {
+          data.tab5.formVisible = false;
+          data.tab5.selectVisible = true;
+        } else {
+          message.warn("请先选择显示字段名称");
+        }
+      }
+    };
+
+    //tab4新增条件选择显示类型
+    const selectTab4ShowTypeChange = (value: any, option: any) => {
+      if (value === "3" || value === "4" || value === "5") {
+        if (value === "3" || value === "4") {
+          data.tab4.selectData.title = "配置下拉框数据";
+        } else if (value === "5") {
+          data.tab4.selectData.title = "配置树形结构数据";
+        }
+        //加载之前保存的数据
+        data.tab4.selectData.form.ecShowTypeSql = data.tab4.form.ecShowTypeSql;
+        if (data.tab4.form.ecShowFieldName) {
+          data.tab4.formVisible = false;
+          data.tab4.selectData.visible = true;
+        } else {
+          message.warn("请先选择显示字段名称");
+        }
+      }
+    };
+
+    //tab4新增条件选择取消
+    const handleTab4SelectCancel = () => {
+      //重置表单数据
+      tab4SelectFormRef.value.resetFields();
+      if (data.tab4.isShowForm) {
+        data.tab4.formVisible = true;
+        //是否存在默认值变成空
+        data.tab4.form.ecDefltValFlg = null;
+      } else {
+        //遍历原始数据
+        data.tab4.table.originalTableList.some((item, index) => {
+          if (item.ecId === data.tab4.select.form.ecId) {
+            data.tab4.table.tableList[index].ecDefltValFlg = item.ecDefltValFlg;
+            return true;
+          }
+        });
+      }
+    };
+
+    //tab5新增条件选择取消
+    const handleTab5SelectCancel = () => {
+      //重置表单数据
+      tab5SelectFormRef.value.resetFields();
+      if (data.tab5.isShowForm) {
+        data.tab5.formVisible = true;
+        //是否存在默认值变成空
+        data.tab5.form.ecDefltValFlg = null;
+      } else {
+        //遍历原始数据
+        data.tab5.table.originalTableList.some((item, index) => {
+          if (item.ecId === data.tab5.select.form.ecId) {
+            data.tab5.table.tableList[index].ecDefltValFlg = item.ecDefltValFlg;
+            return true;
+          }
+        });
+      }
+    };
+
+    //tab4新增条件选择保存
+    const tab4AddSelectSubmit = () => {
+      //验证
+      tab4SelectFormRef.value.validate().then(() => {
+        if (data.tab4.isShowForm) {
+          //将SQL语句保存form表单中
+          data.tab4.form.ecDefltVal = data.tab4.select.form.ecDefltVal;
+          data.tab4.formVisible = true;
+        } else {
+          //将SQL语句保存到table数据中
+          data.tab4.table.tableList.some((item: any, index: number) => {
+            if (data.tab4.select.form.ecId == item.ecId) {
+              item.ecDefltVal = data.tab4.select.form.ecDefltVal;
+              return true;
+            }
+          });
+          //同步数据
+          data.tab4.table.originalTableList = cloneDeep(
+            data.tab4.table.tableList
+          );
+          //显示类型重置为空
+          data.tab4.form.ecDefltValFlg = null;
+          message.warn("临时数据保存成功，请点击保存");
+        }
+        tab4SelectFormRef.value.resetFields();
+        data.tab4.selectVisible = false;
+        data.tab4.isShowForm = true;
+      });
+    };
+
+    //tab5新增条件选择保存
+    const tab5AddSelectSubmit = () => {
+      //验证
+      tab5SelectFormRef.value.validate().then(() => {
+        if (data.tab5.isShowForm) {
+          //将SQL语句保存form表单中
+          data.tab5.form.ecDefltVal = data.tab5.select.form.ecDefltVal;
+          data.tab5.formVisible = true;
+        } else {
+          //将SQL语句保存到table数据中
+          data.tab5.table.tableList.some((item: any, index: number) => {
+            if (data.tab5.select.form.ecId == item.ecId) {
+              item.ecDefltVal = data.tab5.select.form.ecDefltVal;
+              return true;
+            }
+          });
+          //同步数据
+          data.tab5.table.originalTableList = cloneDeep(
+            data.tab5.table.tableList
+          );
+          //显示类型重置为空
+          data.tab5.form.ecDefltValFlg = null;
+          message.warn("临时数据保存成功，请点击保存");
+        }
+        tab5SelectFormRef.value.resetFields();
+        data.tab5.selectVisible = false;
+        data.tab5.isShowForm = true;
+      });
+    };
+
+    //tab2新增显示类型SQL选择取消
+    const handleTab2SelectDataCancel = () => {
+      //重置表单数据
+      tab2SelectDataFormRef.value.resetFields();
+      //显示类型重置为空
+      data.tab2.fdDatatype = null;
+    };
+
+    //tab4新增显示类型SQL选择取消
+    const handleTab4SelectDataCancel = () => {
+      //重置表单数据
+      tab4SelectDataFormRef.value.resetFields();
+      data.tab4.selectData.form.ecShowTypeSql = "";
+      //恢复显示类型
+      data.tab4.form.ecShowType = data.tab4.selectData.ecShowType;
+      if (data.tab4.isShowForm) {
+        data.tab4.formVisible = true;
+      } else {
+        //遍历原始数据
+        data.tab4.table.originalTableList.some((item, index) => {
+          if (item.ecId === data.tab4.selectData.form.ecId) {
+            data.tab4.table.tableList[index].ecShowType = item.ecShowType;
+            return true;
+          }
+        });
+      }
+    };
+
+    //tab2 SQL数据保存
+    const tab2AddSelectDataSubmit = () => {
+      //验证
+      tab2SelectDataFormRef.value.validate().then(() => {
+        //将SQL语句保存到table数据中
+        data.tab2.table.tableList.some((item: any, index: number) => {
+          if (data.tab2.selectData.form.fdId == item.fdId) {
+            item.fdSysValue = data.tab2.selectData.form.fdSysValue;
+            return true;
+          }
+        });
+        message.warn("临时数据保存成功，请点击保存");
+        tab2SelectDataFormRef.value.resetFields();
+        data.tab2.selectData.visible = false;
+      });
+    };
+
+    //tab4新增显示类型SQL数据保存
+    const tab4AddSelectDataSubmit = () => {
+      //验证
+      tab4SelectDataFormRef.value.validate().then(() => {
+        if (data.tab4.isShowForm) {
+          //将SQL语句保存form表单中
+          data.tab4.form.ecShowTypeSql =
+            data.tab4.selectData.form.ecShowTypeSql;
+          data.tab4.selectData.ecShowType = data.tab4.form.ecShowType;
+          data.tab4.formVisible = true;
+        } else {
+          //将SQL语句保存到table数据中
+          data.tab4.table.tableList.some((item: any, index: number) => {
+            if (data.tab4.selectData.form.ecId == item.ecId) {
+              item.ecShowTypeSql = data.tab4.selectData.form.ecShowTypeSql;
+              return true;
+            }
+          });
+          //同步数据
+          data.tab4.table.originalTableList = cloneDeep(
+            data.tab4.table.tableList
+          );
+          //显示类型重置为空
+          data.tab4.form.ecShowType = null;
+          message.warn("临时数据保存成功，请点击保存");
+        }
+        tab4SelectDataFormRef.value.resetFields();
+        data.tab4.selectData.form.ecShowTypeSql = "";
+        data.tab4.selectData.visible = false;
+        data.tab4.isShowForm = true;
+      });
+    };
+
+    //tab5新增条件选择取消
+    const handleTab5SelectDataCancel = () => {
+      //重置表单数据
+      tab5SelectDataFormRef.value.resetFields();
+      data.tab5.selectData.form.ecShowTypeSql = "";
+      //恢复显示类型
+      data.tab5.form.ecShowType = data.tab5.selectData.ecShowType;
+      if (data.tab5.isShowForm) {
+        data.tab5.formVisible = true;
+      } else {
+        //遍历原始数据
+        data.tab5.table.originalTableList.some((item, index) => {
+          if (item.ecId === data.tab5.selectData.form.ecId) {
+            data.tab5.table.tableList[index].ecShowType = item.ecShowType;
+            return true;
+          }
+        });
+      }
+    };
+
+    //tab5新增条件选择显示类型
+    const selectTab5ShowTypeChange = (value: any, option: any) => {
+      if (value === "3" || value === "4" || value === "5") {
+        if (value === "3" || value === "4") {
+          data.tab5.selectData.title = "配置下拉框数据";
+        } else if (value === "5") {
+          data.tab5.selectData.title = "配置树形结构数据";
+        }
+        //加载之前保存的数据
+        data.tab5.selectData.form.ecShowTypeSql = data.tab5.form.ecShowTypeSql;
+        if (data.tab5.form.ecShowFieldName) {
+          data.tab5.formVisible = false;
+          data.tab5.selectData.visible = true;
+        } else {
+          message.warn("请先选择显示字段名称");
+        }
+      } else if (value === "6") {
+        data.tab5.form.ecDefltValFlg = "Y";
+        data.tab5.form.ecIsRequired = "Y";
+        data.tab5.form.ecConditionIsshow = "0";
+      }
+    };
+
+    //tab5新增显示类型SQL数据保存
+    const tab5AddSelectDataSubmit = () => {
+      //验证
+      tab5SelectDataFormRef.value.validate().then(() => {
+        if (data.tab5.isShowForm) {
+          //将SQL语句保存form表单中
+          data.tab5.form.ecShowTypeSql =
+            data.tab5.selectData.form.ecShowTypeSql;
+          data.tab5.selectData.ecShowType = data.tab5.form.ecShowType;
+          data.tab5.formVisible = true;
+        } else {
+          //将SQL语句保存到table数据中
+          data.tab5.table.tableList.some((item: any, index: number) => {
+            if (data.tab5.selectData.form.ecId == item.ecId) {
+              item.ecShowTypeSql = data.tab5.selectData.form.ecShowTypeSql;
+              return true;
+            }
+          });
+          //同步数据
+          data.tab5.table.originalTableList = cloneDeep(
+            data.tab5.table.tableList
+          );
+          //显示类型重置为空
+          data.tab5.form.ecShowType = null;
+          message.warn("临时数据保存成功，请点击保存");
+        }
+        tab5SelectDataFormRef.value.resetFields();
+        data.tab5.selectData.form.ecShowTypeSql = "";
+        data.tab5.selectData.visible = false;
+        data.tab5.isShowForm = true;
+      });
+    };
+
+    //tab6新增条件选择取消
+    const handleTab6SelectDataCancel = () => {
+      //重置表单数据
+      tab6SelectDataFormRef.value.resetFields();
+      data.tab6.selectData.form.ecShowTypeSql = "";
+      //恢复显示类型
+      data.tab6.form.ecShowType = data.tab6.selectData.ecShowType;
+      if (data.tab6.isShowForm) {
+        data.tab6.formVisible = true;
+      } else {
+        //遍历原始数据
+        data.tab6.table.originalTableList.some((item, index) => {
+          if (item.ecId === data.tab6.selectData.form.ecId) {
+            data.tab6.table.tableList[index].ecShowType = item.ecShowType;
+            return true;
+          }
+        });
+      }
+    };
+
+    //tab6新增条件选择显示类型
+    const selectTab6ShowTypeChange = (value: any, option: any) => {
+      if (value === "3" || value === "4" || value === "5") {
+        if (value === "3" || value === "4") {
+          data.tab6.selectData.title = "配置下拉框数据";
+        } else if (value === "5") {
+          data.tab6.selectData.title = "配置树形结构数据";
+        }
+        //加载之前保存的数据
+        data.tab6.selectData.form.ecShowTypeSql = data.tab6.form.ecShowTypeSql;
+        if (data.tab6.form.ecShowFieldName) {
+          data.tab6.formVisible = false;
+          data.tab6.selectData.visible = true;
+        } else {
+          message.warn("请先选择显示字段名称");
+        }
+      }
+    };
+
+    //tab6新增显示类型SQL数据保存
+    const tab6AddSelectDataSubmit = () => {
+      //验证
+      tab6SelectDataFormRef.value.validate().then(() => {
+        if (data.tab6.isShowForm) {
+          //将SQL语句保存form表单中
+          data.tab6.form.ecShowTypeSql =
+            data.tab6.selectData.form.ecShowTypeSql;
+          data.tab6.selectData.ecShowType = data.tab6.form.ecShowType;
+          data.tab6.formVisible = true;
+        } else {
+          //将SQL语句保存到table数据中
+          data.tab6.table.tableList.some((item: any, index: number) => {
+            if (data.tab6.selectData.form.ecId == item.ecId) {
+              item.ecShowTypeSql = data.tab6.selectData.form.ecShowTypeSql;
+              return true;
+            }
+          });
+          //同步数据
+          data.tab6.table.originalTableList = cloneDeep(
+            data.tab6.table.tableList
+          );
+          //显示类型重置为空
+          data.tab6.form.ecShowType = null;
+          message.warn("临时数据保存成功，请点击保存");
+        }
+        tab6SelectDataFormRef.value.resetFields();
+        data.tab6.selectData.form.ecShowTypeSql = "";
+        data.tab6.selectData.visible = false;
+        data.tab6.isShowForm = true;
+      });
+    };
+
+    const loadDatasource = () => {
+      TSHttp.post("/admin/dbmeta/ds/list").then((res) => {
+        if (res.success) {
+          data.tab3.dataSources = res.data;
+        } else {
+          message.error("请求失败");
+        }
+      });
+    };
+
+    onMounted(() => {
+      loadDatasource()
+      alert("2222223333")
+    })
+
+    return {
+      onDrawerCancel,
+      onSubmit,
+      menuDrawer,
+      drawerFormRef,
+      drawerRules,
+      drawerForm,
+      preview,
+      handleClosePreview,
+      cfDtlBindNameChange,
+      toolbarItems,
+      tab2ToolbarItems,
+      tab2ReceiveData,
+      tab3ReceiveData,
+      tab4ReceiveData,
+      tab5ReceiveData,
+      tab6ReceiveData,
+      tab3ToolbarItems,
+      tab4ToolbarItems,
+      tab5ToolbarItems,
+      tab6ToolbarItems,
+      formRef,
+      fileList,
+      tableFormRef,
+      pageFormRef,
+      tab1FormRef,
+      tab4FormRef,
+      tab5FormRef,
+      tab6FormRef,
+      tab3SelectFormRef,
+      tab4SelectFormRef,
+      tab5SelectFormRef,
+      tab2SelectDataFormRef,
+      tab4SelectDataFormRef,
+      tab5SelectDataFormRef,
+      tab6SelectDataFormRef,
+      data,
+      getDsSelect,
+      onDsChange,
+      tabChange,
+      onSearch,
+      showDsTables,
+      loadDatasource,
+      handleCustomChange,
+      handleTableChange,
+      handleRow,
+      handleTableRow,
+      handlePageRow,
+      resetSearch,
+      onSelectChange,
+      onTableSelectChange,
+      onTab4SelectChange,
+      onTab5SelectChange,
+      onTab6SelectChange,
+      onUpdate,
+      onAdd,
+      handleCancel,
+      handleTab4FormCancel,
+      handleTab5FormCancel,
+      handleTab6FormCancel,
+      handleBeforeImport,
+      handleImportChange,
+      handleImportCancel,
+      onDelete,
+      tab1FormSubmit,
+      tab1FormReset,
+      tab4AddFormSubmit,
+      tab5AddFormSubmit,
+      tab6AddFormSubmit,
+      tab2TableSubmit,
+      tab3TableSubmit,
+      tab4TableSubmit,
+      tab4TableReset,
+      tab5TableSubmit,
+      tab5TableReset,
+      tab6TableSubmit,
+      tab6TableReset,
+      TSHttp,
+      getSysParamInfo,
+      sysParamInfo,
+      getSysParamName,
+      onTableSearch,
+      resetTableSearch,
+      chooseTable,
+      handleChooseTableCancel,
+      handleChoosePageCancel,
+      showPages,
+      onPageSelectChange,
+      onField4SelectChange,
+      onField5SelectChange,
+      onField6SelectChange,
+      onPageSearch,
+      resetPageSearch,
+      choosePage,
+      handlePageChange,
+      syncTab2,
+      resetTab3,
+      resetTab4,
+      resetTab5,
+      resetTab6,
+      removeTab4,
+      removeTab5,
+      removeTab6,
+      selectTab4Change,
+      selectTab5Change,
+      selectTab4ShowTypeChange,
+      selectTab5ShowTypeChange,
+      selectTab6ShowTypeChange,
+      handleTab3SelectCancel,
+      handleTab4SelectCancel,
+      handleTab5SelectCancel,
+      tab3AddSelectSubmit,
+      tab4AddSelectSubmit,
+      tab5AddSelectSubmit,
+      handleTab2SelectDataCancel,
+      handleTab4SelectDataCancel,
+      tab2AddSelectDataSubmit,
+      tab4AddSelectDataSubmit,
+      handleTab5SelectDataCancel,
+      tab5AddSelectDataSubmit,
+      handleTab6SelectDataCancel,
+      tab6AddSelectDataSubmit,
+    };
+  },
+});
+</script>
+<style lang="less" scoped>
+</style>
